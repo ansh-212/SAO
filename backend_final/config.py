@@ -7,17 +7,17 @@ load_dotenv()
 
 class Settings(BaseSettings):
     # App
-    APP_NAME: str = "KaushalyaAI"
+    APP_NAME: str = "InterviewVault"
     APP_VERSION: str = "1.0.0"
     DEBUG: bool = True
 
     # Security
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "kaushalya-super-secret-key-change-in-production")
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "interviewvault-secret-key-change-in-production")
     ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24  # 24 hours
 
     # Database
-    DATABASE_URL: str = "sqlite:///./kaushalya.db"
+    DATABASE_URL: str = "sqlite:///./interviewvault.db"
 
     # Gemini AI
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")

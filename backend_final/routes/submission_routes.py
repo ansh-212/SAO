@@ -17,6 +17,7 @@ from services.ai_service import (
 )
 from services.anticheat_service import analyze_submission
 from services.whisper_service import transcribe_audio
+from services.gamification_service import award_xp, update_streak, check_and_award_badges
 from config import settings
 
 router = APIRouter(prefix="/api/submissions", tags=["Submissions"])
@@ -111,10 +112,14 @@ def submit_assessment(
         )
         db.add(submission)
 
-        # Update user XP
+        # Award XP via gamification service
         xp_gain = max(5, int(total_score / 10) * 10)
-        current_user.xp_points = (current_user.xp_points or 0) + xp_gain
+        award_xp(db, current_user, xp_gain, "assessment_complete")
         current_user.last_active = datetime.utcnow()
+
+        # Update streak and check badges
+        update_streak(db, current_user)
+        badges_earned = check_and_award_badges(db, current_user, submission=submission)
 
         db.commit()
         db.refresh(submission)
@@ -187,6 +192,7 @@ def submit_assessment(
             "ai_detection": flags.get("ai_detection", {})
         },
         "xp_gained": max(5, int(total_score / 10) * 10),
+        "badges_earned": badges_earned if 'badges_earned' in dir() else [],
         "pathway": pathway,
         "proctoring": proctoring,
         "message": "Assessment submitted and evaluated successfully!"

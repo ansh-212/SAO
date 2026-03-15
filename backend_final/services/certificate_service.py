@@ -78,7 +78,7 @@ def generate_certificate(
     font_tiny = try_font(18)
 
     # ─── Logo/Title (ASCII only) ───────────────────────────────────────────────
-    draw.text((W // 2, 80), "KAUSHALYAAI", font=font_medium, fill=(0, 86, 210), anchor="mm")
+    draw.text((W // 2, 80), "INTERVIEWVAULT", font=font_medium, fill=(0, 86, 210), anchor="mm")
     draw.text((W // 2, 130), "CERTIFICATE OF ACHIEVEMENT", font=font_small, fill=(148, 163, 184), anchor="mm")
 
     # Separator line

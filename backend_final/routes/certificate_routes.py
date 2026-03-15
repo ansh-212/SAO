@@ -102,7 +102,7 @@ def download_certificate(qr_hash: str, db: Session = Depends(get_db)):
     return FileResponse(
         cert_path,
         media_type="image/png",
-        filename=f"KaushalyaAI_Certificate_{qr_hash[:8]}.png"
+        filename=f"InterviewVault_Certificate_{qr_hash[:8]}.png"
     )
 
 
@@ -128,7 +128,7 @@ def verify_certificate(qr_hash: str, db: Session = Depends(get_db)):
         "assessment_title": assessment.title if assessment else "Unknown",
         "score": submission.total_score if submission else 0,
         "issued_at": cert.issued_at,
-        "platform": "KaushalyaAI — AI Skill Assessment Platform"
+        "platform": "InterviewVault — AI Interview Prep Platform"
     }
 
 

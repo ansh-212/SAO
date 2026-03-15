@@ -1,4 +1,5 @@
 from google import genai
+from google.genai import types
 import json
 import re
 from typing import List, Dict, Any, Optional
@@ -17,15 +18,86 @@ def get_client():
     return genai.Client(api_key=settings.GEMINI_API_KEY)
 
 
-def _generate(prompt: str) -> Optional[str]:
-    """Call Gemini and return text response."""
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  ROBUST GEMINI WRAPPER (Fix 1: structured JSON mode + multi-pass parsing)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+def _safe_parse_json(raw: str) -> Optional[Any]:
+    """
+    Multi-pass JSON parser that handles Gemini's various output quirks:
+    1. Markdown code fences
+    2. Control characters
+    3. Invalid backslash escapes
+    """
+    if not raw or not raw.strip():
+        return None
+
+    text = raw.strip()
+
+    # Strip markdown code fences
+    if text.startswith("```json"):
+        text = text[7:]
+    if text.startswith("```"):
+        text = text[3:]
+    if text.endswith("```"):
+        text = text[:-3]
+    text = text.strip()
+
+    # Pass 1: Try direct parse
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Pass 2: strict=False (allows control chars)
+    try:
+        return json.loads(text, strict=False)
+    except json.JSONDecodeError:
+        pass
+
+    # Pass 3: Fix invalid backslash escapes
+    fixed = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', text)
+    try:
+        return json.loads(fixed, strict=False)
+    except json.JSONDecodeError:
+        pass
+
+    # Pass 4: Strip control chars + fix escapes
+    stripped = re.sub(r'[\x00-\x1f\x7f]', ' ', text)
+    fixed2 = re.sub(r'\\(?!["\\/bfnrtu])', r'\\\\', stripped)
+    try:
+        return json.loads(fixed2, strict=False)
+    except json.JSONDecodeError:
+        pass
+
+    # Pass 5: Regex fallback — try to extract JSON array or object
+    for pattern in [r'\[.*\]', r'\{.*\}']:
+        match = re.search(pattern, stripped, re.DOTALL)
+        if match:
+            try:
+                return json.loads(match.group(), strict=False)
+            except json.JSONDecodeError:
+                continue
+
+    print(f"[_safe_parse_json] ALL PASSES FAILED. Raw (first 300): {repr(raw[:300])}")
+    return None
+
+
+def _generate(prompt: str, json_mode: bool = False) -> Optional[str]:
+    """Call Gemini and return text response. Optionally uses structured JSON mode."""
     client = get_client()
     if not client:
         return None
     try:
+        config = None
+        if json_mode:
+            config = types.GenerateContentConfig(
+                response_mime_type="application/json"
+            )
         response = client.models.generate_content(
             model=settings.GEMINI_MODEL,
-            contents=prompt
+            contents=prompt,
+            config=config
         )
         return response.text
     except Exception as e:
@@ -34,7 +106,91 @@ def _generate(prompt: str) -> Optional[str]:
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  QUESTION GENERATION (Fix 1: topic-specific, min 5, uses key terms)
+#  SCHEMA VALIDATION HELPERS (Fix 2: post-generation validation)
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+REQUIRED_QUESTION_FIELDS = {"text", "type", "max_score"}
+
+def _validate_question(q: dict, index: int) -> bool:
+    """Validate a single generated question has required fields."""
+    if not isinstance(q, dict):
+        print(f"[VALIDATE] Q{index}: not a dict, got {type(q)}")
+        return False
+    missing = REQUIRED_QUESTION_FIELDS - set(q.keys())
+    if missing:
+        print(f"[VALIDATE] Q{index}: missing fields {missing}")
+        return False
+    if not q.get("text", "").strip():
+        print(f"[VALIDATE] Q{index}: empty text")
+        return False
+    return True
+
+
+def _sanitize_question(q: dict, index: int) -> dict:
+    """Ensure a question has all expected fields with sensible defaults."""
+    defaults = {
+        "id": index + 1,
+        "text": "",
+        "type": "open_ended",
+        "bloom_level": "analyze",
+        "section_reference": "Core concepts",
+        "max_score": 10,
+        "rubric": {
+            "depth": "Thorough analysis required",
+            "accuracy": "Factual correctness against source",
+            "application": "Real-world connection",
+            "originality": "Personal insight and original thinking"
+        }
+    }
+    sanitized = {**defaults, **q}
+    # Force id to be sequential
+    sanitized["id"] = index + 1
+    # Ensure max_score is numeric
+    try:
+        sanitized["max_score"] = int(sanitized["max_score"])
+    except (ValueError, TypeError):
+        sanitized["max_score"] = 10
+    # Ensure rubric is a dict
+    if not isinstance(sanitized.get("rubric"), dict):
+        sanitized["rubric"] = defaults["rubric"]
+    return sanitized
+
+
+def _validate_scores(scores: dict, num_questions: int) -> dict:
+    """Validate and clamp evaluation scores to 0-10 range."""
+    validated = {}
+    score_keys = ["depth", "accuracy", "application", "originality", "confidence"]
+    for idx in range(num_questions):
+        key = str(idx)
+        raw = scores.get(key, {})
+        if not isinstance(raw, dict):
+            raw = {}
+        clamped = {}
+        for sk in score_keys:
+            val = raw.get(sk, 5)
+            try:
+                val = float(val)
+            except (ValueError, TypeError):
+                val = 5.0
+            clamped[sk] = max(0, min(10, round(val, 1)))
+        validated[key] = clamped
+    return validated
+
+
+def _validate_feedback(feedback: dict, num_questions: int) -> dict:
+    """Ensure every question index has feedback text."""
+    validated = {}
+    for idx in range(num_questions):
+        key = str(idx)
+        text = feedback.get(key, "")
+        if not isinstance(text, str) or not text.strip():
+            text = "Review your answer against the source material. Focus on providing specific examples and deeper analysis."
+        validated[key] = text
+    return validated
+
+
+# ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+#  QUESTION GENERATION (Fix 1+2: JSON mode + validation)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 def generate_questions_from_text(
@@ -102,16 +258,22 @@ Respond ONLY with a valid JSON array:
 Bloom levels to use: apply, analyze, evaluate, create
 IMPORTANT: Every question text MUST contain at least one specific term from the document."""
 
-    raw = _generate(prompt)
+    raw = _generate(prompt, json_mode=True)
     if raw:
-        try:
-            json_match = re.search(r'\[.*\]', raw, re.DOTALL)
-            if json_match:
-                questions = json.loads(json_match.group())
-                if len(questions) >= 3:  # Accept if at least 3 came back
-                    return questions
-        except Exception as e:
-            print(f"Question parse error: {e}")
+        parsed = _safe_parse_json(raw)
+        if isinstance(parsed, list):
+            # Validate and sanitize each question
+            valid_questions = []
+            for i, q in enumerate(parsed):
+                if _validate_question(q, i):
+                    valid_questions.append(_sanitize_question(q, i))
+                else:
+                    print(f"[QUESTION GEN] Dropping malformed question {i}")
+            if len(valid_questions) >= 3:
+                print(f"[QUESTION GEN] Generated {len(valid_questions)} valid questions")
+                return valid_questions
+            else:
+                print(f"[QUESTION GEN] Only {len(valid_questions)} valid questions, retrying...")
 
     # Retry once with simpler prompt if first attempt failed
     retry_prompt = f"""Generate exactly {num_questions} assessment questions based on this text. 
@@ -122,22 +284,24 @@ TEXT: {text[:10000]}
 
 Return ONLY a JSON array where each item has: id, text, type, bloom_level, section_reference, max_score (10), rubric (dict with depth, accuracy, application, originality).
 """
-    raw2 = _generate(retry_prompt)
+    raw2 = _generate(retry_prompt, json_mode=True)
     if raw2:
-        try:
-            json_match = re.search(r'\[.*\]', raw2, re.DOTALL)
-            if json_match:
-                questions = json.loads(json_match.group())
-                if questions:
-                    return questions
-        except Exception:
-            pass
+        parsed2 = _safe_parse_json(raw2)
+        if isinstance(parsed2, list):
+            valid_questions = []
+            for i, q in enumerate(parsed2):
+                if isinstance(q, dict) and q.get("text", "").strip():
+                    valid_questions.append(_sanitize_question(q, i))
+            if valid_questions:
+                print(f"[QUESTION GEN] Retry produced {len(valid_questions)} questions")
+                return valid_questions
 
+    print("[QUESTION GEN] Both attempts failed, using fallback questions")
     return get_fallback_questions(language)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  EVALUATION (Fix 3: penalize AI-generated, Fix 7: confidence scoring)
+#  EVALUATION (Fix 3: JSON mode + score validation + feedback validation)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 def evaluate_submission(
@@ -148,6 +312,7 @@ def evaluate_submission(
 ) -> tuple:
     """Evaluate student answers. Returns: (scores_dict, feedback_dict, total_score)"""
     lang_name = LANGUAGE_NAMES.get(language, "English")
+    num_questions = len(questions)
 
     qa_pairs = []
     for i, q in enumerate(questions):
@@ -182,6 +347,8 @@ CRITICAL ORIGINALITY RULES:
 - Signs of low confidence: "I think maybe", "I'm not sure but", "probably", excessive hedging
 - Signs of high confidence: direct statements, specific claims, assertive language
 
+You MUST evaluate ALL {num_questions} questions (indices 0 through {num_questions - 1}).
+
 Respond ONLY with valid JSON:
 {{
   "scores": {{
@@ -194,28 +361,27 @@ Respond ONLY with valid JSON:
   }}
 }}"""
 
-    raw = _generate(prompt)
+    raw = _generate(prompt, json_mode=True)
     if raw:
-        try:
-            json_match = re.search(r'\{.*\}', raw, re.DOTALL)
-            if json_match:
-                result = json.loads(json_match.group())
-                scores = result.get("scores", {})
-                feedback = result.get("feedback", {})
-                total = 0
-                count = 0
-                for idx_scores in scores.values():
-                    if isinstance(idx_scores, dict):
-                        # Use depth, accuracy, application, originality for total (not confidence)
-                        core_scores = [idx_scores.get(k, 5) for k in ["depth", "accuracy", "application", "originality"]]
-                        avg = sum(core_scores) / len(core_scores)
-                        total += avg
-                        count += 1
-                total_pct = (total / (count * 10) * 100) if count > 0 else 0
-                return scores, feedback, round(total_pct, 1)
-        except Exception as e:
-            print(f"Evaluation parse error: {e}")
+        result = _safe_parse_json(raw)
+        if isinstance(result, dict) and "scores" in result:
+            scores = _validate_scores(result.get("scores", {}), num_questions)
+            feedback = _validate_feedback(result.get("feedback", {}), num_questions)
+            total = 0
+            count = 0
+            for idx_scores in scores.values():
+                if isinstance(idx_scores, dict):
+                    core_scores = [idx_scores.get(k, 5) for k in ["depth", "accuracy", "application", "originality"]]
+                    avg = sum(core_scores) / len(core_scores)
+                    total += avg
+                    count += 1
+            total_pct = (total / (count * 10) * 100) if count > 0 else 0
+            print(f"[EVALUATION] Scored {count} answers, total: {round(total_pct, 1)}%")
+            return scores, feedback, round(total_pct, 1)
+        else:
+            print(f"[EVALUATION] Parsed response missing 'scores' key: {list(result.keys()) if isinstance(result, dict) else type(result)}")
 
+    print("[EVALUATION] Gemini evaluation failed, using fallback")
     return get_fallback_evaluation(questions, answers)
 
 
@@ -269,21 +435,31 @@ For each answer, respond with JSON:
   }}
 }}"""
 
-    raw = _generate(prompt)
+    raw = _generate(prompt, json_mode=True)
     if raw:
-        try:
-            json_match = re.search(r'\{.*\}', raw, re.DOTALL)
-            if json_match:
-                result = json.loads(json_match.group())
-                return result.get("results", {})
-        except Exception as e:
-            print(f"AI detection parse error: {e}")
+        result = _safe_parse_json(raw)
+        if isinstance(result, dict):
+            results = result.get("results", result)
+            # Validate each entry
+            validated = {}
+            for k, v in results.items():
+                if isinstance(v, dict):
+                    prob = v.get("ai_probability", 50)
+                    try:
+                        prob = max(0, min(100, int(prob)))
+                    except (ValueError, TypeError):
+                        prob = 50
+                    validated[k] = {
+                        "ai_probability": prob,
+                        "reason": str(v.get("reason", "Analysis unavailable"))
+                    }
+            return validated
 
     return {}
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  DYNAMIC FOLLOW-UP QUESTIONS (Fix 5)
+#  DYNAMIC FOLLOW-UP QUESTIONS (Fix 4: validation)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 def generate_followup_question(
@@ -320,23 +496,31 @@ Respond with JSON only:
   "max_score": 5
 }}"""
 
-    raw = _generate(prompt)
+    raw = _generate(prompt, json_mode=True)
     if raw:
-        try:
-            json_match = re.search(r'\{.*\}', raw, re.DOTALL)
-            if json_match:
-                result = json.loads(json_match.group())
-                result["bloom_level"] = "evaluate"
-                result["id"] = "followup"
-                return result
-        except Exception as e:
-            print(f"Followup parse error: {e}")
+        result = _safe_parse_json(raw)
+        if isinstance(result, dict):
+            # Validate non-empty text
+            text = result.get("text", "").strip()
+            if not text:
+                print("[FOLLOWUP] Generated follow-up has empty text, discarding")
+                return None
+            result["text"] = text
+            result["bloom_level"] = "evaluate"
+            result["id"] = "followup"
+            result.setdefault("type", "followup")
+            result.setdefault("probe_reason", "extend")
+            try:
+                result["max_score"] = int(result.get("max_score", 5))
+            except (ValueError, TypeError):
+                result["max_score"] = 5
+            return result
 
     return None
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-#  ADAPTIVE PATHWAY (Fix 6: richer, topic-specific, non-repetitive)
+#  ADAPTIVE PATHWAY (Fix 4: validation)
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 def generate_adaptive_pathway(
@@ -400,14 +584,25 @@ Respond with JSON:
   "estimated_study_hours": 3
 }}"""
 
-    raw = _generate(prompt)
+    raw = _generate(prompt, json_mode=True)
     if raw:
-        try:
-            json_match = re.search(r'\{.*\}', raw, re.DOTALL)
-            if json_match:
-                return json.loads(json_match.group())
-        except Exception as e:
-            print(f"Pathway parse error: {e}")
+        result = _safe_parse_json(raw)
+        if isinstance(result, dict):
+            # Validate required list fields
+            if not isinstance(result.get("skill_gaps"), list) or not result["skill_gaps"]:
+                result["skill_gaps"] = ["Deep Analysis", "Practical Application"]
+            if not isinstance(result.get("recommended_activities"), list) or not result["recommended_activities"]:
+                result["recommended_activities"] = [
+                    f"Review core concepts from {assessment_title}" if assessment_title else "Review fundamental concepts",
+                    "Practice applying theory to real-world problems",
+                    "Write explanations in your own words without referencing materials"
+                ]
+            if not isinstance(result.get("recommended_topics"), list):
+                result["recommended_topics"] = available_topics[:3] if available_topics else []
+            result.setdefault("reason", "Focus on the weakest areas identified in your assessment.")
+            result.setdefault("next_difficulty", "intermediate")
+            result.setdefault("estimated_study_hours", 3)
+            return result
 
     # Fallback with at least some useful info
     criteria_totals = {"depth": 0, "accuracy": 0, "application": 0, "originality": 0}

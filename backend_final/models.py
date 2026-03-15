@@ -22,10 +22,14 @@ class User(Base):
     college = Column(String(255), default="")
     phone = Column(String(20), default="")
     bio = Column(Text, default="")
+    level = Column(Integer, default=1)
+    last_streak_date = Column(DateTime, nullable=True)
 
     pdfs = relationship("PDF", back_populates="uploader")
     submissions = relationship("Submission", back_populates="user")
     certificates = relationship("Certificate", back_populates="user")
+    badges = relationship("UserBadge", back_populates="user", lazy="dynamic")
+    xp_logs = relationship("XPLog", back_populates="user", lazy="dynamic")
 
 
 class PDF(Base):
@@ -117,3 +121,68 @@ class PathwayStep(Base):
     recommended_topics = Column(JSON)  # List of topic strings to study
     created_at = Column(DateTime, default=datetime.utcnow)
     is_completed = Column(Boolean, default=False)
+
+
+class UserBadge(Base):
+    __tablename__ = "user_badges"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    badge_key = Column(String(50), nullable=False)  # key from BADGE_DEFS
+    earned_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="badges")
+
+
+class XPLog(Base):
+    __tablename__ = "xp_logs"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    amount = Column(Integer, nullable=False)
+    reason = Column(String(200), nullable=False)  # "assessment_complete", "badge_earned", etc.
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", back_populates="xp_logs")
+
+
+class Classroom(Base):
+    __tablename__ = "classrooms"
+
+    id = Column(Integer, primary_key=True, index=True)
+    name = Column(String(255), nullable=False)
+    description = Column(Text, default="")
+    class_code = Column(String(20), unique=True, index=True, nullable=False)
+    admin_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    is_active = Column(Boolean, default=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    admin = relationship("User", foreign_keys=[admin_id])
+    members = relationship("ClassroomMember", back_populates="classroom", cascade="all, delete-orphan")
+    assessments = relationship("ClassroomAssessment", back_populates="classroom", cascade="all, delete-orphan")
+
+
+class ClassroomMember(Base):
+    __tablename__ = "classroom_members"
+
+    id = Column(Integer, primary_key=True, index=True)
+    classroom_id = Column(Integer, ForeignKey("classrooms.id"), nullable=False)
+    student_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    joined_at = Column(DateTime, default=datetime.utcnow)
+
+    classroom = relationship("Classroom", back_populates="members")
+    student = relationship("User", foreign_keys=[student_id])
+
+
+class ClassroomAssessment(Base):
+    __tablename__ = "classroom_assessments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    classroom_id = Column(Integer, ForeignKey("classrooms.id"), nullable=False)
+    assessment_id = Column(Integer, ForeignKey("assessments.id"), nullable=False)
+    published_at = Column(DateTime, default=datetime.utcnow)
+    due_at = Column(DateTime, nullable=True)
+
+    classroom = relationship("Classroom", back_populates="assessments")
+    assessment = relationship("Assessment")
+

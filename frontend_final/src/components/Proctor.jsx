@@ -1,14 +1,34 @@
-import React, { useEffect, useRef, useState, useCallback, forwardRef, useImperativeHandle } from 'react'
+import React, { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react'
 import * as faceapi from 'face-api.js'
+import { SuspicionScorer, YoloDetector } from './proctoring'
 
-const Proctor = forwardRef(({ onViolation, onStatsUpdate }, ref) => {
+/**
+ * Proctor — AI-powered exam proctoring component.
+ *
+ * Pipeline:  Face-API (face + landmarks + expressions)
+ *          + YoloDetector (cell phone, book, laptop — toggleable)
+ *          + SuspicionScorer (weighted score aggregation)
+ *
+ * Props:
+ *   onViolation    – callback({ type, message })  per-violation
+ *   onStatsUpdate  – callback(liveStats)           every detection tick
+ *   enableObjects  – boolean (default true) — toggle object detection on/off
+ *   detectionInterval – ms between detection ticks (default 2000)
+ */
+const Proctor = forwardRef(({ onViolation, onStatsUpdate, enableObjects = true, detectionInterval = 2000 }, ref) => {
   const videoRef = useRef(null)
   const canvasRef = useRef(null)
   const intervalRef = useRef(null)
-  const cocoModelRef = useRef(null)
+
+  // Modular sub-systems (created once, stored in refs)
+  const yoloRef = useRef(null)
+  const scorerRef = useRef(null)
+
   const [modelsLoaded, setModelsLoaded] = useState(false)
   const [cameraActive, setCameraActive] = useState(false)
   const [status, setStatus] = useState('initializing')
+  const [objectDetectionReady, setObjectDetectionReady] = useState(false)
+
   const statsRef = useRef({
     totalChecks: 0,
     facePresent: 0,
@@ -19,14 +39,23 @@ const Proctor = forwardRef(({ onViolation, onStatsUpdate }, ref) => {
     expressionHistory: [],
     violations: [],
     startTime: Date.now(),
+    // New: suspicion score history (per-frame snapshots)
+    suspicionSnapshots: [],
+    lastSuspicionResult: null,
   })
 
-  // Expose stats via ref
+  // ──────────────────────────────────────────────────────────────
+  //  Expose stats via ref  (backward-compatible + new fields)
+  // ──────────────────────────────────────────────────────────────
   useImperativeHandle(ref, () => ({
     getStats: () => {
       const s = statsRef.current
       const totalChecks = Math.max(s.totalChecks, 1)
+      const scorer = scorerRef.current
+      const suspicionSnapshot = scorer ? scorer.getSnapshot() : null
+
       return {
+        // ── Existing contract (unchanged) ──
         face_present_pct: Math.round((s.facePresent / totalChecks) * 100),
         face_absent_count: s.faceAbsent,
         multiple_faces_count: s.multipleFaces,
@@ -40,20 +69,35 @@ const Proctor = forwardRef(({ onViolation, onStatsUpdate }, ref) => {
         expression_summary: getExpressionSummary(s.expressionHistory),
         confidence_score: calculateConfidence(s),
         integrity_score: calculateIntegrity(s),
+
+        // ── New: weighted suspicion score ──
+        suspicion_score: suspicionSnapshot ? suspicionSnapshot.suspicionScore : 0,
+        suspicion_trend: suspicionSnapshot ? suspicionSnapshot.trend : 'stable',
+        suspicion_emotion_stress_pct: suspicionSnapshot ? suspicionSnapshot.emotionStressPct : 0,
+        suspicion_emotion_anxiety_pct: suspicionSnapshot ? suspicionSnapshot.emotionAnxietyPct : 0,
+        object_detection_enabled: yoloRef.current ? yoloRef.current.enabled : false,
       }
     },
     stop: () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
       const stream = videoRef.current?.srcObject
       if (stream) stream.getTracks().forEach(t => t.stop())
-    }
+      if (yoloRef.current) yoloRef.current.dispose()
+    },
+    // New: runtime toggle for object detection
+    toggleObjectDetection: () => {
+      if (yoloRef.current) return yoloRef.current.toggle()
+      return false
+    },
   }))
 
+  // ──────────────────────────────────────────────────────────────
+  //  Scoring helpers (legacy — kept for backward-compat)
+  // ──────────────────────────────────────────────────────────────
   const calculateConfidence = (s) => {
     const totalChecks = Math.max(s.totalChecks, 1)
     const facePct = s.facePresent / totalChecks
     const gazeOnPct = 1 - (s.gazeAway / totalChecks)
-    // Weigh face presence and gaze
     const score = Math.round((facePct * 40) + (gazeOnPct * 40) + 20)
     return Math.min(100, Math.max(0, score))
   }
@@ -78,37 +122,61 @@ const Proctor = forwardRef(({ onViolation, onStatsUpdate }, ref) => {
     return { dominant, distribution }
   }
 
-  // Load face-api models
+  // ──────────────────────────────────────────────────────────────
+  //  Model loading — face-api + YoloDetector (if enabled)
+  // ──────────────────────────────────────────────────────────────
   useEffect(() => {
+    // Instantiate scorer once
+    if (!scorerRef.current) {
+      scorerRef.current = new SuspicionScorer()
+    }
+
     const loadModels = async () => {
       try {
-        setStatus('loading models...')
-        await faceapi.nets.tinyFaceDetector.loadFromUri('/models')
-        await faceapi.nets.faceLandmark68Net.loadFromUri('/models')
-        await faceapi.nets.faceExpressionNet.loadFromUri('/models')
+        setStatus('loading face models...')
+        await Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri('/models'),
+          faceapi.nets.faceLandmark68Net.loadFromUri('/models'),
+          faceapi.nets.faceExpressionNet.loadFromUri('/models'),
+        ])
 
-        // Load COCO-SSD for object detection
-        try {
-          const cocoSsd = await import('@tensorflow-models/coco-ssd')
-          cocoModelRef.current = await cocoSsd.load()
-        } catch (e) {
-          console.warn('COCO-SSD load failed, object detection disabled', e)
+        // Load object detection via modular YoloDetector (only if enabled)
+        if (enableObjects) {
+          setStatus('loading object detection...')
+          try {
+            const detector = new YoloDetector({ enabled: true, skipFrames: 2 })
+            await detector.load()
+            yoloRef.current = detector
+            setObjectDetectionReady(true)
+          } catch (e) {
+            console.warn('[Proctor] Object detection load failed, continuing without it:', e)
+          }
         }
 
         setModelsLoaded(true)
         setStatus('starting camera...')
       } catch (e) {
-        console.error('Model loading error:', e)
+        console.error('[Proctor] Model loading error:', e)
         setStatus('model load failed')
       }
     }
     loadModels()
     return () => {
       if (intervalRef.current) clearInterval(intervalRef.current)
+      if (yoloRef.current) yoloRef.current.dispose()
     }
-  }, [])
+  }, []) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Start camera
+  // Sync enableObjects prop to YoloDetector at runtime
+  useEffect(() => {
+    if (yoloRef.current) {
+      yoloRef.current.setEnabled(enableObjects)
+    }
+  }, [enableObjects])
+
+  // ──────────────────────────────────────────────────────────────
+  //  Camera start
+  // ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!modelsLoaded) return
     const startCamera = async () => {
@@ -123,14 +191,16 @@ const Proctor = forwardRef(({ onViolation, onStatsUpdate }, ref) => {
           setStatus('active')
         }
       } catch (e) {
-        console.error('Camera error:', e)
+        console.error('[Proctor] Camera error:', e)
         setStatus('camera denied')
       }
     }
     startCamera()
   }, [modelsLoaded])
 
-  // Detection loop
+  // ──────────────────────────────────────────────────────────────
+  //  Main detection loop
+  // ──────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!cameraActive || !modelsLoaded) return
 
@@ -139,14 +209,21 @@ const Proctor = forwardRef(({ onViolation, onStatsUpdate }, ref) => {
       if (!video || video.readyState < 2) return
 
       statsRef.current.totalChecks++
-
-      // Face detection with landmarks + expressions
-      const detections = await faceapi
-        .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 }))
-        .withFaceLandmarks()
-        .withFaceExpressions()
-
       const now = new Date().toLocaleTimeString()
+
+      // ── 1. Face detection (face-api.js) ─────────────────────
+      let detections = []
+      try {
+        detections = await faceapi
+          .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 224, scoreThreshold: 0.4 }))
+          .withFaceLandmarks()
+          .withFaceExpressions()
+      } catch (e) {
+        // face-api can occasionally throw on bad frames
+      }
+
+      let dominantEmotion = 'neutral'
+      let gazeAway = false
 
       if (detections.length === 0) {
         statsRef.current.faceAbsent++
@@ -173,60 +250,69 @@ const Proctor = forwardRef(({ onViolation, onStatsUpdate }, ref) => {
 
           if (gazeOffset > 0.35) {
             statsRef.current.gazeAway++
+            gazeAway = true
             addViolation('gaze_away', `Looking away from screen at ${now}`)
           }
         }
 
         // Expression tracking
         const expressions = detections[0].expressions
-        const dominant = Object.keys(expressions).reduce((a, b) =>
+        dominantEmotion = Object.keys(expressions).reduce((a, b) =>
           expressions[a] > expressions[b] ? a : b
         )
-        statsRef.current.expressionHistory.push(dominant)
-        // Keep last 100 entries
+        statsRef.current.expressionHistory.push(dominantEmotion)
         if (statsRef.current.expressionHistory.length > 100) {
           statsRef.current.expressionHistory = statsRef.current.expressionHistory.slice(-100)
         }
       }
 
-      // Object detection (every other check to save CPU)
-      if (cocoModelRef.current && statsRef.current.totalChecks % 2 === 0) {
-        try {
-          const predictions = await cocoModelRef.current.detect(video)
-          // Detect phones, books, laptops, remotes, and extra people
-          const personCount = predictions.filter(p => p.class === 'person' && p.score > 0.4).length
-          const suspicious = predictions.filter(p =>
-            ['cell phone', 'book', 'laptop', 'remote'].includes(p.class) && p.score > 0.45
-          )
-          // Flag if more than 1 person detected (third party assistance)
-          if (personCount > 1) {
-            statsRef.current.objectsDetected.push('extra person')
-            addViolation('extra_person', `${personCount} people detected at ${now}`)
-          }
-          suspicious.forEach(obj => {
+      // ── 2. Object detection via YoloDetector ────────────────
+      let detectedObjects = []
+      if (yoloRef.current) {
+        const result = await yoloRef.current.detect(video)
+        if (!result.skipped) {
+          detectedObjects = result.objects
+          // Record into legacy stats
+          for (const obj of detectedObjects) {
             statsRef.current.objectsDetected.push(obj.class)
-            addViolation('object', `${obj.class} detected (${Math.round(obj.score * 100)}% confidence) at ${now}`)
-          })
-        } catch (e) {
-          // Object detection can occasionally fail, ignore
+            if (obj.class === 'extra person') {
+              addViolation('extra_person', `${obj.count || 2} people detected at ${now}`)
+            } else {
+              addViolation('object', `${obj.class} detected (${Math.round(obj.score * 100)}% conf) at ${now}`)
+            }
+          }
         }
       }
 
-      // Update parent with current stats
+      // ── 3. Suspicion scoring ────────────────────────────────
+      if (scorerRef.current) {
+        statsRef.current.lastSuspicionResult = scorerRef.current.processFrame({
+          faceCount: detections.length,
+          dominantEmotion,
+          detectedObjects,
+          gazeAway,
+        })
+      }
+
+      // ── 4. Update parent with live stats ────────────────────
       if (onStatsUpdate) {
+        const suspicion = statsRef.current.lastSuspicionResult
         onStatsUpdate({
           faceDetected: detections.length > 0,
           multipleFaces: detections.length > 1,
           gazeOnScreen: statsRef.current.gazeAway === 0 || (statsRef.current.totalChecks - statsRef.current.gazeAway) > statsRef.current.gazeAway,
           totalViolations: statsRef.current.violations.length,
           integrity: calculateIntegrity(statsRef.current),
-          expression: detections.length > 0 ? Object.keys(detections[0].expressions).reduce((a, b) =>
-            detections[0].expressions[a] > detections[0].expressions[b] ? a : b
-          ) : 'unknown',
+          expression: dominantEmotion,
+          // New suspicion fields
+          suspicionScore: suspicion ? suspicion.suspicionScore : 0,
+          suspicionSignals: suspicion ? suspicion.signals : [],
+          suspicionTrend: suspicion ? suspicion.trend : 'stable',
+          objectDetectionActive: yoloRef.current ? yoloRef.current.ready : false,
         })
       }
 
-      // Draw on canvas
+      // ── 5. Draw on canvas ───────────────────────────────────
       if (canvasRef.current && video) {
         const displaySize = { width: video.videoWidth || 320, height: video.videoHeight || 240 }
         faceapi.matchDimensions(canvasRef.current, displaySize)
@@ -235,18 +321,38 @@ const Proctor = forwardRef(({ onViolation, onStatsUpdate }, ref) => {
         ctx.clearRect(0, 0, displaySize.width, displaySize.height)
         faceapi.draw.drawDetections(canvasRef.current, resized)
         faceapi.draw.drawFaceLandmarks(canvasRef.current, resized)
+
+        // Draw object detection boxes on canvas
+        if (detectedObjects.length > 0) {
+          ctx.strokeStyle = '#f87171'
+          ctx.lineWidth = 2
+          ctx.font = '11px sans-serif'
+          ctx.fillStyle = '#f87171'
+          const scaleX = displaySize.width / (video.videoWidth || 320)
+          const scaleY = displaySize.height / (video.videoHeight || 240)
+          for (const obj of detectedObjects) {
+            if (obj.bbox && obj.bbox[2] > 0) {
+              const [x, y, w, h] = obj.bbox
+              ctx.strokeRect(x * scaleX, y * scaleY, w * scaleX, h * scaleY)
+              ctx.fillText(`⚠ ${obj.class} ${Math.round(obj.score * 100)}%`, x * scaleX, Math.max(12, y * scaleY - 4))
+            }
+          }
+        }
       }
     }
 
-    intervalRef.current = setInterval(detect, 2000)
+    intervalRef.current = setInterval(detect, detectionInterval)
     return () => clearInterval(intervalRef.current)
-  }, [cameraActive, modelsLoaded])
+  }, [cameraActive, modelsLoaded, detectionInterval]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const addViolation = (type, message) => {
     statsRef.current.violations.push({ type, message, timestamp: Date.now() })
     if (onViolation) onViolation({ type, message })
   }
 
+  // ──────────────────────────────────────────────────────────────
+  //  Render
+  // ──────────────────────────────────────────────────────────────
   return (
     <div style={{ position: 'relative', borderRadius: 12, overflow: 'hidden', background: '#000', width: '100%', maxWidth: 320 }}>
       <video
@@ -268,6 +374,16 @@ const Proctor = forwardRef(({ onViolation, onStatsUpdate }, ref) => {
       }}>
         {status === 'active' ? '🟢 Proctoring' : status === 'camera denied' ? '🔴 Camera denied' : `⏳ ${status}`}
       </div>
+      {/* Object detection indicator */}
+      {status === 'active' && (
+        <div style={{
+          position: 'absolute', top: 8, right: 8,
+          background: objectDetectionReady ? 'rgba(16,185,129,0.75)' : 'rgba(251,191,36,0.75)',
+          color: '#fff', padding: '2px 8px', borderRadius: 20, fontSize: 9, fontWeight: 600
+        }}>
+          {objectDetectionReady ? '🔍 OD' : '— OD off'}
+        </div>
+      )}
     </div>
   )
 })

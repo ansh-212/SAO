@@ -187,8 +187,8 @@ DEMO_ASSESSMENTS = [
         ]
     },
     {
-        "title": "KaushalyaAI Platform Orientation",
-        "description": "A beginner-friendly introductory assessment to get familiar with the KaushalyaAI platform and higher-order thinking. Take this first!",
+        "title": "InterviewVault Platform Orientation",
+        "description": "A beginner-friendly introductory assessment to get familiar with the InterviewVault platform and higher-order thinking. Take this first!",
         "difficulty": "beginner",
         "category": "Orientation",
         "time_limit_minutes": 15,
@@ -234,7 +234,7 @@ def seed(db: Session):
 
     # Create admin user
     admin = models.User(
-        email="admin@kaushalya.ai",
+        email="admin@interviewvault.ai",
         name="Prof. Arjun Sharma",
         hashed_password=get_password_hash("admin123"),
         role="admin",
@@ -247,7 +247,7 @@ def seed(db: Session):
     # Create student users
     students = [
         models.User(
-            email="student@kaushalya.ai",
+            email="student@interviewvault.ai",
             name="Priya Patel",
             hashed_password=get_password_hash("student123"),
             role="student",
@@ -256,7 +256,7 @@ def seed(db: Session):
             streak_days=7
         ),
         models.User(
-            email="rahul@kaushalya.ai",
+            email="rahul@interviewvault.ai",
             name="Rahul Mehta",
             hashed_password=get_password_hash("student123"),
             role="student",
@@ -265,7 +265,7 @@ def seed(db: Session):
             streak_days=3
         ),
         models.User(
-            email="sneha@kaushalya.ai",
+            email="sneha@interviewvault.ai",
             name="Sneha Kulkarni",
             hashed_password=get_password_hash("student123"),
             role="student",
@@ -366,7 +366,7 @@ if __name__ == "__main__":
     try:
         from models import User
         if db.query(User).count() > 0:
-            print("⚠️  Database already has data. To reset: delete kaushalya.db and re-run.")
+            print("⚠️  Database already has data. To reset: delete interviewvault.db and re-run.")
         else:
             seed(db)
     finally:

@@ -1,9 +1,70 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import { useLang } from '../context/LangContext'
 import Proctor from '../components/Proctor'
 import ProctorStats from '../components/ProctorStats'
+import DarkLayout from '../components/layout/DarkLayout'
 import api from '../api/client'
+
+/* ─── Evaluate Loading Skeleton ─────────────────────────────────────────── */
+const EVAL_STEPS = [
+  { icon: '📤', label: 'Submitting your answers...' },
+  { icon: '🧠', label: 'Running AI evaluation...' },
+  { icon: '🔍', label: 'Analyzing response quality...' },
+  { icon: '📊', label: 'Generating detailed feedback...' },
+  { icon: '🏅', label: 'Computing your score...' },
+]
+
+function EvalLoadingSkeleton({ step }) {
+  return (
+    <motion.div
+      className="dk-eval-skeleton"
+      initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+    >
+      <div className="dk-eval-orb">🧠</div>
+      <div style={{ textAlign: 'center' }}>
+        <div style={{ fontWeight: 700, fontSize: '1.2rem', color: '#f1f5f9', marginBottom: 6, letterSpacing: '-0.02em' }}>
+          Evaluating Your Assessment
+        </div>
+        <div style={{ fontSize: '0.82rem', color: '#64748b' }}>
+          This may take 15–30 seconds — AI is analyzing each answer individually
+        </div>
+      </div>
+      <div className="dk-eval-steps">
+        {EVAL_STEPS.map((s, i) => (
+          <div key={i} className={`dk-eval-step ${i < step ? 'done' : i === step ? 'active' : 'pending'}`}>
+            <span style={{ width: 20, textAlign: 'center' }}>
+              {i < step ? '✅' : i === step ? '⏳' : '○'}
+            </span>
+            {s.label}
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  )
+}
+
+/* ─── Toast notification ────────────────────────────────────────────────── */
+function Toast({ message, type = 'error', onDismiss }) {
+  useEffect(() => {
+    const t = setTimeout(onDismiss, 5000)
+    return () => clearTimeout(t)
+  }, [onDismiss])
+
+  return (
+    <motion.div
+      className={`dk-toast dk-toast-${type}`}
+      initial={{ opacity: 0, y: 16, scale: 0.96 }}
+      animate={{ opacity: 1, y: 0, scale: 1 }}
+      exit={{ opacity: 0, y: 8, scale: 0.96 }}
+    >
+      <span>{type === 'error' ? '⚠' : '✅'}</span>
+      <span>{message}</span>
+      <button onClick={onDismiss} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '1rem', marginLeft: 8 }}>×</button>
+    </motion.div>
+  )
+}
 
 export default function TakeAssessment() {
   const { id } = useParams()
@@ -16,8 +77,10 @@ export default function TakeAssessment() {
   const [currentQ, setCurrentQ] = useState(0)
   const [timeLeft, setTimeLeft] = useState(0)
   const [submitting, setSubmitting] = useState(false)
+  const [evalStep, setEvalStep] = useState(0)
   const [loadingFollowup, setLoadingFollowup] = useState(false)
   const [showFollowup, setShowFollowup] = useState(null)
+  const [toast, setToast] = useState(null)
 
   // Anti-cheat
   const [tabSwitches, setTabSwitches] = useState(0)
@@ -84,7 +147,7 @@ export default function TakeAssessment() {
   const startSpeechToText = () => {
     const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition
     if (!SpeechRecognition) {
-      alert('Speech recognition is not supported in this browser. Please use Chrome.')
+      setToast({ message: 'Speech recognition is not supported. Please use Chrome.', type: 'error' })
       return
     }
 
@@ -95,7 +158,6 @@ export default function TakeAssessment() {
 
     recognition.onresult = (event) => {
       let finalTranscript = ''
-      let interimTranscript = ''
       let totalConfidence = 0
       let confidenceCount = 0
 
@@ -105,8 +167,6 @@ export default function TakeAssessment() {
           finalTranscript += result[0].transcript + ' '
           totalConfidence += result[0].confidence
           confidenceCount++
-        } else {
-          interimTranscript += result[0].transcript
         }
       }
 
@@ -180,7 +240,7 @@ export default function TakeAssessment() {
       setIsRecording(true)
       setRecordingType(type)
     } catch (err) {
-      alert(`Could not access ${type === 'video' ? 'camera' : 'microphone'}. Please check permissions.`)
+      setToast({ message: `Could not access ${type === 'video' ? 'camera' : 'microphone'}. Check permissions.`, type: 'error' })
     }
   }
 
@@ -221,10 +281,19 @@ export default function TakeAssessment() {
     setLoadingFollowup(false)
   }
 
-  // ─── Submit ───────────────────────────────────────────────────────────────
+  // ─── Submit with evaluation loading skeleton ─────────────────────────────
   const handleSubmit = async () => {
     if (submitting) return
     setSubmitting(true)
+    setEvalStep(0)
+
+    // Simulate step progression during the long AI call
+    const stepTimers = [
+      setTimeout(() => setEvalStep(1), 2000),
+      setTimeout(() => setEvalStep(2), 6000),
+      setTimeout(() => setEvalStep(3), 12000),
+      setTimeout(() => setEvalStep(4), 18000),
+    ]
 
     // Get proctoring stats
     const proctoringStats = proctorRef.current ? proctorRef.current.getStats() : null
@@ -251,243 +320,268 @@ export default function TakeAssessment() {
         },
         proctoring_data: proctoringStats
       })
+      stepTimers.forEach(clearTimeout)
       navigate(`/result/${res.data.submission_id}`, { state: res.data })
     } catch (err) {
-      alert('Submission failed: ' + (err.response?.data?.detail || err.message))
+      stepTimers.forEach(clearTimeout)
+      setToast({ message: 'Submission failed: ' + (err.response?.data?.detail || err.message), type: 'error' })
       setSubmitting(false)
     }
   }
 
-  if (!assessment) return <div className="page-container"><div className="loading-spinner" /></div>
+  if (!assessment) return (
+    <DarkLayout>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', flexDirection: 'column', gap: 16 }}>
+        <div className="dk-spinner" />
+        <p style={{ color: 'var(--dk-text-muted)', fontSize: '0.88rem' }}>Loading assessment...</p>
+      </div>
+    </DarkLayout>
+  )
 
   const questions = assessment.questions || []
   const q = questions[currentQ]
   const progress = Object.keys(answers).filter(k => answers[k]?.trim()).length
 
   return (
-    <div className="page-container" style={{ maxWidth: 1100 }}>
-      <div style={{ display: 'flex', gap: 20 }}>
-        {/* Main content */}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          {/* Header bar */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}>
-            <div>
-              <h2 style={{ margin: 0 }}>{assessment.title}</h2>
-              <span className="badge">{assessment.difficulty}</span>
-            </div>
-            <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
-              {tabSwitches > 0 && (
-                <span className="badge" style={{ background: 'var(--error)', fontSize: 11 }}>
-                  Tab switches: {tabSwitches}
-                </span>
-              )}
-              <div style={{
-                background: timeLeft < 60 ? 'var(--error)' : 'var(--glass-bg)',
-                padding: '8px 16px', borderRadius: 8, fontWeight: 700, fontSize: 20,
-                fontFamily: 'monospace', color: timeLeft < 60 ? '#fff' : 'var(--text-primary)'
-              }}>
-                {formatTime(timeLeft)}
+    <DarkLayout>
+      {/* Evaluation Loading Skeleton */}
+      <AnimatePresence>
+        {submitting && <EvalLoadingSkeleton step={evalStep} />}
+      </AnimatePresence>
+
+      {/* Toast notifications */}
+      <AnimatePresence>
+        {toast && <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />}
+      </AnimatePresence>
+
+      <div style={{ maxWidth: 1100, margin: '0 auto' }}>
+        <div style={{ display: 'flex', gap: 20 }}>
+          {/* Main content */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Header bar */}
+            <motion.div
+              style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24, flexWrap: 'wrap', gap: 12 }}
+              initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <div>
+                <h2 style={{ margin: 0, color: 'var(--dk-text)' }}>{assessment.title}</h2>
+                <span className="badge badge-primary" style={{ marginTop: 4 }}>{assessment.difficulty}</span>
               </div>
-            </div>
-          </div>
-
-          {/* Progress bar */}
-          <div style={{ background: 'var(--glass-bg)', borderRadius: 8, height: 6, marginBottom: 24 }}>
-            <div style={{
-              background: 'var(--accent-gradient)', borderRadius: 8, height: '100%',
-              width: `${(progress / questions.length) * 100}%`, transition: 'width 0.3s'
-            }} />
-          </div>
-
-          {/* Question navigator */}
-          <div style={{ display: 'flex', gap: 6, marginBottom: 24, flexWrap: 'wrap' }}>
-            {questions.map((_, i) => (
-              <button key={i} onClick={() => { setShowFollowup(null); setCurrentQ(i) }}
-                style={{
-                  width: 36, height: 36, borderRadius: 8, border: 'none', cursor: 'pointer',
-                  fontWeight: 600, fontSize: 13,
-                  background: i === currentQ ? 'var(--primary)' : answers[i]?.trim() ? 'var(--success)' : 'var(--glass-bg)',
-                  color: (i === currentQ || answers[i]?.trim()) ? '#fff' : 'var(--text-secondary)',
-                }}>{i + 1}</button>
-            ))}
-          </div>
-
-          {/* Question card */}
-          <div className="card" style={{ marginBottom: 24 }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
-              <span className="badge">{q?.bloom_level}</span>
-              <span className="badge" style={{ background: 'rgba(99,102,241,0.15)', color: 'var(--primary)' }}>
-                Q{currentQ + 1} of {questions.length}
-              </span>
-            </div>
-
-            <h3 style={{ marginBottom: 8 }}>{q?.text}</h3>
-            {q?.section_reference && (
-              <p style={{ fontSize: 13, color: 'var(--text-muted)', marginBottom: 16 }}>
-                Reference: {q.section_reference}
-              </p>
-            )}
-
-            <textarea
-              value={answers[currentQ] || ''}
-              onChange={(e) => setAnswers(prev => ({ ...prev, [currentQ]: e.target.value }))}
-              placeholder="Type your detailed answer here... Use specific examples and demonstrate your understanding."
-              rows={8}
-              style={{
-                width: '100%', padding: 16, borderRadius: 12, border: '1px solid var(--border)',
-                background: 'var(--glass-bg)', color: 'var(--text-primary)', fontSize: 15,
-                fontFamily: 'inherit', resize: 'vertical', outline: 'none'
-              }}
-            />
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, flexWrap: 'wrap', gap: 8 }}>
-              <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                {(answers[currentQ] || '').split(/\s+/).filter(Boolean).length} {t('wordsCount')}
-              </span>
-              {speechConfidence !== null && (
-                <span className="badge" style={{
-                  background: speechConfidence >= 70 ? 'rgba(16,185,129,0.15)' : 'rgba(245,158,11,0.15)',
-                  color: speechConfidence >= 70 ? 'var(--success)' : 'var(--warning)'
+              <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+                {tabSwitches > 0 && (
+                  <span className="badge badge-danger" style={{ fontSize: 11 }}>
+                    Tab switches: {tabSwitches}
+                  </span>
+                )}
+                <div style={{
+                  background: timeLeft < 60 ? 'rgba(248,113,113,0.2)' : 'var(--dk-surface-2)',
+                  border: `1px solid ${timeLeft < 60 ? 'rgba(248,113,113,0.3)' : 'var(--dk-border)'}`,
+                  padding: '8px 16px', borderRadius: 10, fontWeight: 700, fontSize: 20,
+                  fontFamily: "'Geist Mono', monospace", color: timeLeft < 60 ? 'var(--dk-red)' : 'var(--dk-text)',
                 }}>
-                  🎤 Voice confidence: {speechConfidence}%
+                  {formatTime(timeLeft)}
+                </div>
+              </div>
+            </motion.div>
+
+            {/* Progress bar */}
+            <div className="dk-progress-track" style={{ marginBottom: 24 }}>
+              <div className="dk-progress-fill" style={{ width: `${(progress / questions.length) * 100}%` }} />
+            </div>
+
+            {/* Question navigator */}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 24, flexWrap: 'wrap' }}>
+              {questions.map((_, i) => (
+                <button key={i} onClick={() => { setShowFollowup(null); setCurrentQ(i) }}
+                  style={{
+                    width: 36, height: 36, borderRadius: 10, border: '1px solid',
+                    cursor: 'pointer', fontWeight: 600, fontSize: 13,
+                    transition: 'all 0.2s ease',
+                    background: i === currentQ ? 'rgba(99,102,241,0.2)' : answers[i]?.trim() ? 'rgba(74,222,128,0.15)' : 'var(--dk-surface-2)',
+                    color: i === currentQ ? 'var(--dk-primary-light)' : answers[i]?.trim() ? 'var(--dk-green)' : 'var(--dk-text-muted)',
+                    borderColor: i === currentQ ? 'rgba(99,102,241,0.4)' : answers[i]?.trim() ? 'rgba(74,222,128,0.3)' : 'var(--dk-border)',
+                  }}>{i + 1}</button>
+              ))}
+            </div>
+
+            {/* Question card */}
+            <motion.div
+              key={currentQ}
+              className="dk-card dk-card-accent"
+              style={{ marginBottom: 24 }}
+              initial={{ opacity: 0, x: 12 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ duration: 0.3, ease: [0.16, 1, 0.3, 1] }}
+            >
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 12, gap: 12, flexWrap: 'wrap' }}>
+                <span className="badge badge-primary">{q?.bloom_level}</span>
+                <span className="badge" style={{ background: 'rgba(99,102,241,0.15)', color: 'var(--dk-primary-light)', borderColor: 'rgba(99,102,241,0.25)' }}>
+                  Q{currentQ + 1} of {questions.length}
                 </span>
-              )}
-            </div>
+              </div>
 
-            {/* Recording & Speech controls */}
-            <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
-              {!isRecording && !isListening ? (
-                <>
-                  <button className="btn btn-secondary" onClick={startSpeechToText}
-                    style={{ fontSize: 13, padding: '8px 14px' }}>
-                    🗣️ Voice Answer
-                  </button>
-                  <button className="btn btn-secondary" onClick={() => startRecording('audio')}
-                    style={{ fontSize: 13, padding: '8px 14px' }}>
-                    🎙️ {t('recordAudio')}
-                  </button>
-                  <button className="btn btn-secondary" onClick={() => startRecording('video')}
-                    style={{ fontSize: 13, padding: '8px 14px' }}>
-                    📹 {t('recordVideo')}
-                  </button>
-                  {answers[currentQ]?.trim()?.length > 20 && !followups[currentQ] && (
-                    <button className="btn btn-secondary" onClick={() => requestFollowup(currentQ)}
-                      disabled={loadingFollowup}
-                      style={{ fontSize: 13, padding: '8px 14px', marginLeft: 'auto' }}>
-                      {loadingFollowup ? `⏳ ${t('generating')}` : `🔄 ${t('getFollowup')}`}
+              <h3 style={{ marginBottom: 8, color: 'var(--dk-text)' }}>{q?.text}</h3>
+              {q?.section_reference && (
+                <p style={{ fontSize: 13, color: 'var(--dk-text-muted)', marginBottom: 16 }}>
+                  Reference: {q.section_reference}
+                </p>
+              )}
+
+              <textarea
+                value={answers[currentQ] || ''}
+                onChange={(e) => setAnswers(prev => ({ ...prev, [currentQ]: e.target.value }))}
+                placeholder="Type your detailed answer here... Use specific examples and demonstrate your understanding."
+                rows={8}
+                className="dk-input"
+                style={{ resize: 'vertical', minHeight: 180, lineHeight: 1.7 }}
+              />
+
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, flexWrap: 'wrap', gap: 8 }}>
+                <span style={{ fontSize: 12, color: 'var(--dk-text-muted)' }}>
+                  {(answers[currentQ] || '').split(/\s+/).filter(Boolean).length} {t('wordsCount')}
+                </span>
+                {speechConfidence !== null && (
+                  <span className="badge badge-success" style={{ fontSize: 11 }}>
+                    🎤 Voice confidence: {speechConfidence}%
+                  </span>
+                )}
+              </div>
+
+              {/* Recording & Speech controls */}
+              <div style={{ display: 'flex', gap: 8, marginTop: 16, flexWrap: 'wrap' }}>
+                {!isRecording && !isListening ? (
+                  <>
+                    <button className="dk-btn dk-btn-ghost dk-btn-sm" onClick={startSpeechToText}>
+                      🗣️ Voice Answer
                     </button>
-                  )}
-                </>
-              ) : isListening ? (
-                <button className="btn" onClick={stopSpeechToText}
-                  style={{ background: 'var(--warning)', fontSize: 13, padding: '8px 14px', animation: 'pulse 1s infinite' }}>
-                  🗣️ Listening... (tap to stop)
-                </button>
-              ) : (
-                <button className="btn" onClick={stopRecording}
-                  style={{ background: 'var(--error)', fontSize: 13, padding: '8px 14px', animation: 'pulse 1s infinite' }}>
-                  ⏹ {t('stopRecording')}
-                </button>
-              )}
-            </div>
+                    <button className="dk-btn dk-btn-ghost dk-btn-sm" onClick={() => startRecording('audio')}>
+                      🎙️ {t('recordAudio')}
+                    </button>
+                    <button className="dk-btn dk-btn-ghost dk-btn-sm" onClick={() => startRecording('video')}>
+                      📹 {t('recordVideo')}
+                    </button>
+                    {answers[currentQ]?.trim()?.length > 20 && !followups[currentQ] && (
+                      <button className="dk-btn dk-btn-ghost dk-btn-sm" onClick={() => requestFollowup(currentQ)}
+                        disabled={loadingFollowup}
+                        style={{ marginLeft: 'auto' }}>
+                        {loadingFollowup ? `⏳ ${t('generating')}` : `🔄 ${t('getFollowup')}`}
+                      </button>
+                    )}
+                  </>
+                ) : isListening ? (
+                  <button className="dk-btn dk-btn-primary dk-btn-sm" onClick={stopSpeechToText}
+                    style={{ animation: 'pulse 1s infinite' }}>
+                    🗣️ Listening... (tap to stop)
+                  </button>
+                ) : (
+                  <button className="dk-btn dk-btn-danger dk-btn-sm" onClick={stopRecording}
+                    style={{ animation: 'pulse 1s infinite' }}>
+                    ⏹ {t('stopRecording')}
+                  </button>
+                )}
+              </div>
 
-            {/* Video preview */}
-            {isRecording && recordingType === 'video' && (
-              <div style={{ marginTop: 12, borderRadius: 12, overflow: 'hidden', maxWidth: 320 }}>
-                <video ref={videoPreviewRef} muted style={{ width: '100%', borderRadius: 12, background: '#000' }} />
+              {/* Video preview */}
+              {isRecording && recordingType === 'video' && (
+                <div style={{ marginTop: 12, borderRadius: 12, overflow: 'hidden', maxWidth: 320 }}>
+                  <video ref={videoPreviewRef} muted style={{ width: '100%', borderRadius: 12, background: '#000' }} />
+                </div>
+              )}
+            </motion.div>
+
+            {/* Follow-up question (dynamic) */}
+            {followups[currentQ] && showFollowup === currentQ && (
+              <div className="dk-card" style={{ marginBottom: 24, borderLeft: '3px solid var(--dk-amber)', background: 'rgba(251,191,36,0.04)' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
+                  <span style={{ fontSize: 18 }}>🔄</span>
+                  <h4 style={{ margin: 0, color: 'var(--dk-amber)' }}>{t('followupChallenge')}</h4>
+                  <span className="badge badge-warning" style={{ fontSize: 11 }}>
+                    {followups[currentQ].question?.probe_reason || 'deeper probe'}
+                  </span>
+                </div>
+                <p style={{ marginBottom: 12, color: 'var(--dk-text-sub)' }}>{followups[currentQ].question?.text}</p>
+                <textarea
+                  value={followups[currentQ].answer || ''}
+                  onChange={(e) => setFollowups(prev => ({
+                    ...prev,
+                    [currentQ]: { ...prev[currentQ], answer: e.target.value }
+                  }))}
+                  placeholder="Answer the follow-up question..."
+                  rows={4}
+                  className="dk-input"
+                  style={{ resize: 'vertical' }}
+                />
               </div>
             )}
+
+            {/* Navigation */}
+            <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+              <button className="dk-btn dk-btn-ghost" onClick={() => { setShowFollowup(null); setCurrentQ(Math.max(0, currentQ - 1)) }}
+                disabled={currentQ === 0 || submitting}>
+                {t('previous')}
+              </button>
+              <div style={{ display: 'flex', gap: 12 }}>
+                {currentQ < questions.length - 1 ? (
+                  <button className="dk-btn dk-btn-primary" onClick={() => { setShowFollowup(null); setCurrentQ(currentQ + 1) }}
+                    disabled={submitting}>
+                    {t('next')}
+                  </button>
+                ) : (
+                  <button className="dk-btn dk-btn-primary dk-btn-lg" onClick={handleSubmit} disabled={submitting}
+                    style={{ background: submitting ? 'var(--dk-text-muted)' : undefined, minWidth: 180 }}>
+                    {submitting ? '⏳ Evaluating...' : `${t('submit')} (${progress}/${questions.length} ${t('answered')})`}
+                  </button>
+                )}
+              </div>
+            </div>
           </div>
 
-          {/* Follow-up question (dynamic) */}
-          {followups[currentQ] && showFollowup === currentQ && (
-            <div className="card" style={{ marginBottom: 24, borderLeft: '3px solid var(--warning)', background: 'rgba(245,158,11,0.05)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 12 }}>
-                <span style={{ fontSize: 18 }}>🔄</span>
-                <h4 style={{ margin: 0, color: 'var(--warning)' }}>{t('followupChallenge')}</h4>
-                <span className="badge" style={{ background: 'rgba(245,158,11,0.2)', color: 'var(--warning)', fontSize: 11 }}>
-                  {followups[currentQ].question?.probe_reason || 'deeper probe'}
-                </span>
+          {/* Proctor sidebar */}
+          {showProctor && (
+            <div style={{ width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <div style={{ position: 'sticky', top: 20 }}>
+                <div className="dk-proctor-container">
+                  <Proctor
+                    ref={proctorRef}
+                    onViolation={(v) => console.log('Proctor violation:', v)}
+                    onStatsUpdate={setProctorData}
+                  />
+                </div>
+                <div style={{ marginTop: 12 }}>
+                  <ProctorStats proctorData={proctorData} />
+                </div>
+                <button
+                  className="dk-btn dk-btn-ghost dk-btn-sm"
+                  onClick={() => setShowProctor(false)}
+                  style={{ width: '100%', marginTop: 8, fontSize: 11, justifyContent: 'center' }}
+                >
+                  Hide Camera
+                </button>
               </div>
-              <p style={{ marginBottom: 12 }}>{followups[currentQ].question?.text}</p>
-              <textarea
-                value={followups[currentQ].answer || ''}
-                onChange={(e) => setFollowups(prev => ({
-                  ...prev,
-                  [currentQ]: { ...prev[currentQ], answer: e.target.value }
-                }))}
-                placeholder="Answer the follow-up question..."
-                rows={4}
-                style={{
-                  width: '100%', padding: 12, borderRadius: 8, border: '1px solid var(--border)',
-                  background: 'var(--glass-bg)', color: 'var(--text-primary)', fontSize: 14,
-                  fontFamily: 'inherit', resize: 'vertical', outline: 'none'
-                }}
-              />
             </div>
           )}
 
-          {/* Navigation */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-            <button className="btn btn-secondary" onClick={() => { setShowFollowup(null); setCurrentQ(Math.max(0, currentQ - 1)) }}
-              disabled={currentQ === 0}>
-              {t('previous')}
+          {/* Mini proctor toggle when hidden */}
+          {!showProctor && (
+            <button
+              onClick={() => setShowProctor(true)}
+              style={{
+                position: 'fixed', bottom: 20, right: 20, zIndex: 50,
+                width: 56, height: 56, borderRadius: '50%', border: '1px solid var(--dk-border)',
+                background: proctorData?.faceDetected ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)',
+                color: proctorData?.faceDetected ? 'var(--dk-green)' : 'var(--dk-red)',
+                fontSize: 20, cursor: 'pointer',
+                boxShadow: '0 4px 20px rgba(0,0,0,0.4)', transition: 'all 0.2s',
+                backdropFilter: 'blur(12px)',
+              }}
+              title="Show proctor camera"
+            >
+              {proctorData?.faceDetected ? '📷' : '⚠️'}
             </button>
-            <div style={{ display: 'flex', gap: 12 }}>
-              {currentQ < questions.length - 1 ? (
-                <button className="btn" onClick={() => { setShowFollowup(null); setCurrentQ(currentQ + 1) }}>
-                  {t('next')}
-                </button>
-              ) : (
-                <button className="btn" onClick={handleSubmit} disabled={submitting}
-                  style={{ background: submitting ? 'var(--text-muted)' : 'var(--success)', minWidth: 160 }}>
-                  {submitting ? t('submitting') : `${t('submit')} (${progress}/${questions.length} ${t('answered')})`}
-                </button>
-              )}
-            </div>
-          </div>
+          )}
         </div>
-
-        {/* Proctor sidebar */}
-        {showProctor && (
-          <div style={{ width: 320, flexShrink: 0, display: 'flex', flexDirection: 'column', gap: 12 }}>
-            <div style={{ position: 'sticky', top: 20 }}>
-              <Proctor
-                ref={proctorRef}
-                onViolation={(v) => console.log('Proctor violation:', v)}
-                onStatsUpdate={setProctorData}
-              />
-              <div style={{ marginTop: 12 }}>
-                <ProctorStats proctorData={proctorData} />
-              </div>
-              <button
-                className="btn btn-secondary btn-sm"
-                onClick={() => setShowProctor(false)}
-                style={{ width: '100%', marginTop: 8, fontSize: 11, justifyContent: 'center' }}
-              >
-                Hide Camera
-              </button>
-            </div>
-          </div>
-        )}
-
-        {/* Mini proctor toggle when hidden */}
-        {!showProctor && (
-          <button
-            onClick={() => setShowProctor(true)}
-            style={{
-              position: 'fixed', bottom: 20, right: 20, zIndex: 50,
-              width: 56, height: 56, borderRadius: '50%', border: 'none',
-              background: proctorData?.faceDetected ? 'var(--success)' : 'var(--error)',
-              color: '#fff', fontSize: 20, cursor: 'pointer',
-              boxShadow: '0 4px 20px rgba(0,0,0,0.4)', transition: 'all 0.2s',
-            }}
-            title="Show proctor camera"
-          >
-            {proctorData?.faceDetected ? '📷' : '⚠️'}
-          </button>
-        )}
       </div>
-    </div>
+    </DarkLayout>
   )
 }

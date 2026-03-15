@@ -1,18 +1,43 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react'
 import Editor from '@monaco-editor/react'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
     Upload, FileText, Activity, ShieldCheck, Link, Loader2, Code, Lightbulb,
     Target, Zap, Play, CheckCircle, RefreshCw, ArrowRight, Brain, Terminal, Send,
     Clock, Eye, EyeOff, AlertTriangle, Camera
 } from 'lucide-react'
 import { Radar, RadarChart, PolarGrid, PolarAngleAxis, ResponsiveContainer } from 'recharts'
-import Sidebar from '../components/Sidebar'
+import DarkLayout from '../components/layout/DarkLayout'
 import Proctor from '../components/Proctor'
 import ProctorStats from '../components/ProctorStats'
+import { useAuth } from '../context/AuthContext'
+import { DEMO_AI_EVALUATION } from '../data/demoData'
+import '../styles/page-animations.css'
+
+/* ─── Toast Component ──────────────────────────────────────────────────── */
+function Toast({ message, type = 'error', onDismiss }) {
+    useEffect(() => {
+        const t = setTimeout(onDismiss, 5000)
+        return () => clearTimeout(t)
+    }, [onDismiss])
+    return (
+        <motion.div
+            className={`dk-toast dk-toast-${type}`}
+            initial={{ opacity: 0, y: 16, scale: 0.96 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 8, scale: 0.96 }}
+        >
+            <span>{type === 'error' ? '⚠' : '✅'}</span>
+            <span>{message}</span>
+            <button onClick={onDismiss} style={{ background: 'none', border: 'none', color: 'inherit', cursor: 'pointer', fontSize: '1rem', marginLeft: 8 }}>×</button>
+        </motion.div>
+    )
+}
 
 const API_BASE = '/api/coding'
 
 export default function CodingSkills() {
+    const { isDemoMode } = useAuth()
     // View Mode: 'home' | 'coding' | 'results'
     const [viewMode, setViewMode] = useState('home')
 
@@ -35,6 +60,8 @@ export default function CodingSkills() {
     const [isRunning, setIsRunning] = useState(false)
     const [isSubmitting, setIsSubmitting] = useState(false)
     const [isEvaluating, setIsEvaluating] = useState(false)
+    const [toast, setToast] = useState(null)
+    const [evalPhaseText, setEvalPhaseText] = useState('')
 
     // Timer
     const [timeLeft, setTimeLeft] = useState(0)
@@ -481,6 +508,7 @@ class Solution:
         setIsEvaluating(true)
         setTimerActive(false)
         saveCurrentQuestionState()
+        setEvalPhaseText('Submitting code...')
 
         // Gather proctor stats
         const proctoringStats = proctorRef.current ? proctorRef.current.getStats() : null
@@ -495,6 +523,30 @@ class Solution:
         logsSnapshot[currentQuestionIndex] = sessionLogs
 
         const timeTaken = totalTimeLimit - timeLeft
+
+        // Eval phase text animation
+        const phaseTimers = [
+            setTimeout(() => setEvalPhaseText('Analyzing AST structure...'), 1500),
+            setTimeout(() => setEvalPhaseText('Evaluating code complexity...'), 3500),
+            setTimeout(() => setEvalPhaseText('Running semantic analysis...'), 6000),
+            setTimeout(() => setEvalPhaseText('Computing cognitive scores...'), 9000),
+        ]
+
+        // Demo mode bypass
+        if (isDemoMode) {
+            setTimeout(() => {
+                phaseTimers.forEach(clearTimeout)
+                const demoResult = {
+                    ...DEMO_AI_EVALUATION,
+                    _proctoring: proctoringStats || { integrity_score: 92, face_present_pct: 97, total_violations: 1, objects_detected: [], expression_summary: { dominant: 'neutral' } },
+                    _timeTaken: timeTaken || 180,
+                }
+                setResults(demoResult)
+                setViewMode('results')
+                setIsEvaluating(false)
+            }, 4000)
+            return
+        }
 
         if (batchQuestions.length > 0) {
             const batchPayload = {
@@ -521,14 +573,14 @@ class Solution:
                     body: JSON.stringify(batchPayload),
                 })
                 const data = await response.json()
-                // Attach proctor summary to results for display
                 data._proctoring = proctoringStats
                 data._timeTaken = timeTaken
                 setResults(data)
                 setViewMode('results')
             } catch (err) {
-                alert("Error: Could not connect to evaluation service.")
+                setToast({ message: 'Could not connect to evaluation service. Check your connection.', type: 'error' })
             } finally {
+                phaseTimers.forEach(clearTimeout)
                 setIsEvaluating(false)
             }
         } else {
@@ -554,8 +606,9 @@ class Solution:
                 setResults(data)
                 setViewMode('results')
             } catch (err) {
-                alert("Error: Could not connect to evaluation service.")
+                setToast({ message: 'Could not connect to evaluation service. Check your connection.', type: 'error' })
             } finally {
+                phaseTimers.forEach(clearTimeout)
                 setIsEvaluating(false)
             }
         }
@@ -602,61 +655,60 @@ class Solution:
         ]
 
         return (
-            <div className="page-layout">
-                <Sidebar />
-                <div className="main-content fade-in">
-                    <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+            <DarkLayout>
+                <div className="dk-page">
+                    <div className="dk-page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                         <div>
                             <h1>📊 Cognitive Profile</h1>
                             <p>AI-powered skill assessment complete</p>
                         </div>
-                        <button onClick={resetAll} className="btn btn-secondary">
+                        <button onClick={resetAll} className="dk-btn dk-btn-ghost">
                             <RefreshCw size={16} /> New Session
                         </button>
                     </div>
 
                     <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
                         {/* Radar Chart */}
-                        <div className="card card-body" style={{ height: '320px' }}>
+                        <div className="dk-spotlight-card" style={{ height: '320px', padding: 24 }}>
                             <ResponsiveContainer width="100%" height="100%">
                                 <RadarChart cx="50%" cy="50%" outerRadius="80%" data={chartData}>
-                                    <PolarGrid stroke="#E5E7EB" />
-                                    <PolarAngleAxis dataKey="subject" tick={{ fill: '#475467', fontSize: 12 }} />
-                                    <Radar name="Candidate" dataKey="A" stroke="#0056D2" strokeWidth={2} fill="#0056D2" fillOpacity={0.2} />
+                                    <PolarGrid stroke="rgba(99,102,241,0.2)" />
+                                    <PolarAngleAxis dataKey="subject" tick={{ fill: '#94a3b8', fontSize: 12 }} />
+                                    <Radar name="Candidate" dataKey="A" stroke="#6366f1" strokeWidth={2} fill="#6366f1" fillOpacity={0.2} />
                                 </RadarChart>
                             </ResponsiveContainer>
                         </div>
 
                         {/* Executive Summary + Scores */}
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                            <div className="card card-body">
-                                <h3 style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '8px' }}>
+                            <div className="dk-card">
+                                <h3 style={{ fontSize: '0.75rem', color: 'var(--dk-text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '8px' }}>
                                     Executive Summary
                                 </h3>
-                                <p style={{ color: 'var(--text-secondary)', lineHeight: 1.7, fontSize: '0.9rem' }}>{results.executive_summary}</p>
+                                <p style={{ color: 'var(--dk-text-sub)', lineHeight: 1.7, fontSize: '0.9rem' }}>{results.executive_summary}</p>
                             </div>
 
                             <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, 1fr)', gap: '12px' }}>
-                                <div className="card card-body" style={{ textAlign: 'center', padding: '16px' }}>
-                                    <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--success)' }}>{results.logic_score}</div>
-                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: '4px' }}>Logic Score</div>
+                                <div className="dk-card" style={{ textAlign: 'center', padding: '16px' }}>
+                                    <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--dk-green)' }}>{results.logic_score}</div>
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--dk-text-muted)', textTransform: 'uppercase', marginTop: '4px' }}>Logic Score</div>
                                 </div>
-                                <div className="card card-body" style={{ textAlign: 'center', padding: '16px' }}>
-                                    <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#7C3AED' }}>{results.resilience_score}</div>
-                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: '4px' }}>Grit Metric</div>
+                                <div className="dk-card" style={{ textAlign: 'center', padding: '16px' }}>
+                                    <div style={{ fontSize: '1.75rem', fontWeight: 800, color: '#a855f7' }}>{results.resilience_score}</div>
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--dk-text-muted)', textTransform: 'uppercase', marginTop: '4px' }}>Grit Metric</div>
                                 </div>
-                                <div className="card card-body" style={{ textAlign: 'center', padding: '16px' }}>
-                                    <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--primary)' }}>{results.clean_code_score}</div>
-                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: '4px' }}>Clean Code</div>
+                                <div className="dk-card" style={{ textAlign: 'center', padding: '16px' }}>
+                                    <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--dk-primary-light)' }}>{results.clean_code_score}</div>
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--dk-text-muted)', textTransform: 'uppercase', marginTop: '4px' }}>Clean Code</div>
                                 </div>
-                                <div className="card card-body" style={{ textAlign: 'center', padding: '16px' }}>
-                                    <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--warning)' }}>{results.debugging_score}</div>
-                                    <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: '4px' }}>Debugging</div>
+                                <div className="dk-card" style={{ textAlign: 'center', padding: '16px' }}>
+                                    <div style={{ fontSize: '1.75rem', fontWeight: 800, color: 'var(--dk-amber)' }}>{results.debugging_score}</div>
+                                    <div style={{ fontSize: '0.7rem', color: 'var(--dk-text-muted)', textTransform: 'uppercase', marginTop: '4px' }}>Debugging</div>
                                 </div>
-                                <div className="card card-body" style={{
+                                <div className="dk-card" style={{
                                     textAlign: 'center', padding: '16px', gridColumn: 'span 2',
-                                    background: results.originality_score < 30 ? '#FDECEA' : 'var(--bg-card)',
-                                    borderColor: results.originality_score < 30 ? '#F5C6CB' : 'var(--border)'
+                                    background: results.originality_score < 30 ? 'rgba(248,113,113,0.08)' : 'var(--dk-surface)',
+                                    borderColor: results.originality_score < 30 ? 'rgba(248,113,113,0.3)' : 'var(--dk-border)'
                                 }}>
                                     <div style={{ fontSize: '1.75rem', fontWeight: 800, color: results.originality_score < 30 ? 'var(--danger)' : 'var(--success)' }}>
                                         {results.originality_score}
@@ -670,7 +722,7 @@ class Solution:
                     </div>
 
                     {/* Telemetry Bar */}
-                    <div className="card" style={{ marginTop: '24px', padding: '16px 20px' }}>
+                    <div className="dk-card" style={{ marginTop: '24px', padding: '16px 20px' }}>
                         <p style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', margin: 0 }}>
                             <span style={{ fontWeight: 600, color: 'var(--text-primary)' }}>Session Telemetry:</span>{' '}
                             {perQuestionRunCount.reduce((a, b) => a + b, 0) || runCount} total execution attempts,{' '}
@@ -696,51 +748,63 @@ class Solution:
 
                     {/* Proctoring Report */}
                     {results._proctoring && (
-                        <div className="card" style={{ marginTop: '16px', padding: '20px' }}>
-                            <h3 style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '12px' }}>
+                        <div className="dk-card" style={{ marginTop: '16px', padding: '20px' }}>
+                            <h3 style={{ fontSize: '0.75rem', color: 'var(--dk-text-muted)', textTransform: 'uppercase', fontWeight: 700, letterSpacing: '0.05em', marginBottom: '12px' }}>
                                 🔒 Proctoring Report
                             </h3>
-                            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '12px' }}>
-                                <div className="card card-body" style={{ textAlign: 'center', padding: '12px' }}>
+                            <div style={{ display: 'grid', gridTemplateColumns: `repeat(${results._proctoring.suspicion_score !== undefined ? 5 : 4}, 1fr)`, gap: '12px' }}>
+                                <div className="dk-card" style={{ textAlign: 'center', padding: '12px' }}>
                                     <div style={{
                                         fontSize: '1.5rem', fontWeight: 800,
-                                        color: results._proctoring.integrity_score >= 70 ? 'var(--success)' : results._proctoring.integrity_score >= 40 ? 'var(--warning)' : 'var(--danger)'
+                                        color: results._proctoring.integrity_score >= 70 ? 'var(--dk-green)' : results._proctoring.integrity_score >= 40 ? 'var(--dk-amber)' : 'var(--dk-red)'
                                     }}>{results._proctoring.integrity_score}%</div>
-                                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: '4px' }}>Integrity</div>
+                                    <div style={{ fontSize: '0.65rem', color: 'var(--dk-text-muted)', textTransform: 'uppercase', marginTop: '4px' }}>Integrity</div>
                                 </div>
-                                <div className="card card-body" style={{ textAlign: 'center', padding: '12px' }}>
-                                    <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--primary)' }}>{results._proctoring.face_present_pct}%</div>
-                                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: '4px' }}>Face Present</div>
+                                <div className="dk-card" style={{ textAlign: 'center', padding: '12px' }}>
+                                    <div style={{ fontSize: '1.5rem', fontWeight: 800, color: 'var(--dk-primary-light)' }}>{results._proctoring.face_present_pct}%</div>
+                                    <div style={{ fontSize: '0.65rem', color: 'var(--dk-text-muted)', textTransform: 'uppercase', marginTop: '4px' }}>Face Present</div>
                                 </div>
-                                <div className="card card-body" style={{ textAlign: 'center', padding: '12px' }}>
+                                <div className="dk-card" style={{ textAlign: 'center', padding: '12px' }}>
                                     <div style={{
                                         fontSize: '1.5rem', fontWeight: 800,
-                                        color: results._proctoring.total_violations === 0 ? 'var(--success)' : 'var(--danger)'
+                                        color: results._proctoring.total_violations === 0 ? 'var(--dk-green)' : 'var(--dk-red)'
                                     }}>{results._proctoring.total_violations}</div>
-                                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: '4px' }}>Violations</div>
+                                    <div style={{ fontSize: '0.65rem', color: 'var(--dk-text-muted)', textTransform: 'uppercase', marginTop: '4px' }}>Violations</div>
                                 </div>
-                                <div className="card card-body" style={{ textAlign: 'center', padding: '12px' }}>
+                                <div className="dk-card" style={{ textAlign: 'center', padding: '12px' }}>
                                     <div style={{ fontSize: '1.5rem', fontWeight: 800 }}>
                                         {results._proctoring.expression_summary?.dominant === 'neutral' ? '😐' :
                                             results._proctoring.expression_summary?.dominant === 'happy' ? '😊' :
                                                 results._proctoring.expression_summary?.dominant === 'surprised' ? '😲' : '😐'}
                                     </div>
-                                    <div style={{ fontSize: '0.65rem', color: 'var(--text-muted)', textTransform: 'uppercase', marginTop: '4px' }}>
+                                    <div style={{ fontSize: '0.65rem', color: 'var(--dk-text-muted)', textTransform: 'uppercase', marginTop: '4px' }}>
                                         {results._proctoring.expression_summary?.dominant || 'neutral'}
                                     </div>
                                 </div>
+                                {results._proctoring.suspicion_score !== undefined && (
+                                    <div className="dk-card" style={{ textAlign: 'center', padding: '12px' }}>
+                                        <div style={{
+                                            fontSize: '1.5rem', fontWeight: 800,
+                                            color: results._proctoring.suspicion_score <= 20 ? 'var(--dk-green)' : results._proctoring.suspicion_score <= 50 ? 'var(--dk-amber)' : 'var(--dk-red)'
+                                        }}>
+                                            {results._proctoring.suspicion_score}
+                                            <span style={{ fontSize: '0.75rem' }}>
+                                                {results._proctoring.suspicion_trend === 'rising' ? '↗' : results._proctoring.suspicion_trend === 'falling' ? '↘' : '→'}
+                                            </span>
+                                        </div>
+                                        <div style={{ fontSize: '0.65rem', color: 'var(--dk-text-muted)', textTransform: 'uppercase', marginTop: '4px' }}>Suspicion</div>
+                                    </div>
+                                )}
                             </div>
                             {results._proctoring.objects_detected?.length > 0 && (
-                                <div style={{ marginTop: '12px', padding: '10px 14px', background: '#FDECEA', borderRadius: 'var(--radius-md)', border: '1px solid #F5C6CB' }}>
-                                    <span style={{ fontSize: '0.8rem', fontWeight: 600, color: 'var(--danger)' }}>
-                                        ⚠️ Objects detected: {results._proctoring.objects_detected.join(', ')}
-                                    </span>
+                                <div className="dk-alert dk-alert-error" style={{ marginTop: 12 }}>
+                                    ⚠️ Objects detected: {results._proctoring.objects_detected.join(', ')}
                                 </div>
                             )}
                         </div>
                     )}
                 </div>
-            </div>
+            </DarkLayout>
         )
     }
 
@@ -753,38 +817,78 @@ class Solution:
         const questionBadge = currentQuestion ? getQuestionTypeBadge(currentQuestion.question_type) : null
 
         return (
-            <div className="page-layout">
-                <Sidebar />
-                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' }}>
+            <DarkLayout>
+                {/* Toast */}
+                <AnimatePresence>{toast && <Toast message={toast.message} type={toast.type} onDismiss={() => setToast(null)} />}</AnimatePresence>
+
+                {/* Evaluating Overlay */}
+                <AnimatePresence>
+                    {isEvaluating && (
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                            style={{
+                                position: 'fixed', inset: 0, zIndex: 9999,
+                                background: 'rgba(2,2,8,0.85)', backdropFilter: 'blur(12px)',
+                                display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 16,
+                            }}
+                        >
+                            <div style={{
+                                width: 80, height: 80, borderRadius: '50%',
+                                background: 'linear-gradient(135deg, rgba(99,102,241,0.15), rgba(168,85,247,0.15))',
+                                border: '2px solid rgba(99,102,241,0.3)',
+                                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                fontSize: '2rem', position: 'relative',
+                                animation: 'demo-brain-pulse 2s ease-in-out infinite',
+                            }}>
+                                🧠
+                                <div style={{ position: 'absolute', inset: -8, borderRadius: '50%', border: '2px solid transparent', borderTopColor: '#6366f1', animation: 'dk-spin 1.5s linear infinite' }} />
+                            </div>
+                            <div style={{ fontWeight: 700, fontSize: '1.1rem', color: '#f1f5f9', letterSpacing: '-0.02em' }}>
+                                AI Evaluation in Progress
+                            </div>
+                            <div style={{ fontSize: '0.88rem', color: '#818cf8', fontFamily: "'Geist Mono', monospace", animation: 'dk-eval-breathe 2s ease-in-out infinite' }}>
+                                {evalPhaseText}
+                            </div>
+                        </motion.div>
+                    )}
+                </AnimatePresence>
+
+                <div style={{ flex: 1, display: 'flex', flexDirection: 'column', height: 'calc(100vh - 40px)', overflow: 'hidden', margin: '-24px' }}>
                     {/* Timer + Anti-cheat Header Bar */}
                     <div style={{
                         display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                        padding: '8px 16px', background: 'var(--bg-surface)', borderBottom: '2px solid var(--border)',
-                        gap: '12px', flexShrink: 0
+                        padding: '8px 16px', background: 'rgba(5,5,12,0.95)', borderBottom: '1px solid var(--dk-border)',
+                        gap: '12px', flexShrink: 0, backdropFilter: 'blur(12px)',
                     }}>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
-                            <div style={{ background: 'var(--grad-primary)', padding: '6px', borderRadius: 'var(--radius-md)', color: '#fff', display: 'flex' }}>
+                            <div style={{ background: 'linear-gradient(135deg, #6366f1, #a855f7)', padding: '6px', borderRadius: 10, color: '#fff', display: 'flex' }}>
                                 <Brain size={16} />
                             </div>
-                            <span style={{ fontSize: '0.9rem', fontWeight: 700 }}>Coding Assessment</span>
+                            <span style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--dk-text)' }}>Coding Assessment</span>
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
                             {/* Anti-cheat badges */}
                             {tabSwitchCount > 0 && (
-                                <span className="badge" style={{ background: tabSwitchCount >= 5 ? '#FDECEA' : '#FFF3E0', color: tabSwitchCount >= 5 ? 'var(--danger)' : '#E65100', fontSize: '0.7rem', padding: '4px 10px' }}>
+                                <span className="badge" style={{
+                                    background: tabSwitchCount >= 5 ? 'rgba(248,113,113,0.12)' : 'rgba(251,191,36,0.12)',
+                                    color: tabSwitchCount >= 5 ? '#f87171' : '#fbbf24',
+                                    border: `1px solid ${tabSwitchCount >= 5 ? 'rgba(248,113,113,0.25)' : 'rgba(251,191,36,0.25)'}`,
+                                    fontSize: '0.7rem', padding: '4px 10px'
+                                }}>
                                     🔀 {tabSwitchCount} tab switch{tabSwitchCount !== 1 ? 'es' : ''}
                                 </span>
                             )}
                             {pasteCount > 0 && (
-                                <span className="badge" style={{ background: '#FDECEA', color: 'var(--danger)', fontSize: '0.7rem', padding: '4px 10px' }}>
+                                <span className="badge" style={{ background: 'rgba(248,113,113,0.12)', color: '#f87171', border: '1px solid rgba(248,113,113,0.25)', fontSize: '0.7rem', padding: '4px 10px' }}>
                                     📋 {pasteCount} paste{pasteCount !== 1 ? 's' : ''}
                                 </span>
                             )}
                             {/* Proctor integrity mini badge */}
                             {proctorData && (
                                 <span className="badge" style={{
-                                    background: proctorData.integrity >= 70 ? '#E8F5E9' : proctorData.integrity >= 40 ? '#FFF3E0' : '#FDECEA',
-                                    color: proctorData.integrity >= 70 ? 'var(--success)' : proctorData.integrity >= 40 ? '#E65100' : 'var(--danger)',
+                                    background: proctorData.integrity >= 70 ? 'rgba(74,222,128,0.12)' : proctorData.integrity >= 40 ? 'rgba(251,191,36,0.12)' : 'rgba(248,113,113,0.12)',
+                                    color: proctorData.integrity >= 70 ? '#4ade80' : proctorData.integrity >= 40 ? '#fbbf24' : '#f87171',
+                                    border: `1px solid ${proctorData.integrity >= 70 ? 'rgba(74,222,128,0.25)' : proctorData.integrity >= 40 ? 'rgba(251,191,36,0.25)' : 'rgba(248,113,113,0.25)'}`,
                                     fontSize: '0.7rem', padding: '4px 10px'
                                 }}>
                                     🛡️ {proctorData.integrity}%
@@ -792,13 +896,14 @@ class Solution:
                             )}
                             {/* Timer */}
                             <div style={{
-                                background: timeLeft < 60 ? 'var(--danger)' : timeLeft < 300 ? '#FFF3E0' : 'var(--bg-input)',
-                                padding: '6px 14px', borderRadius: 'var(--radius-md)',
-                                fontWeight: 800, fontSize: '1.1rem', fontFamily: 'monospace',
-                                color: timeLeft < 60 ? '#fff' : timeLeft < 300 ? '#E65100' : 'var(--text-primary)',
+                                background: timeLeft < 60 ? 'rgba(248,113,113,0.2)' : timeLeft < 300 ? 'rgba(251,191,36,0.12)' : 'var(--dk-surface-2)',
+                                padding: '6px 14px', borderRadius: 10,
+                                fontWeight: 800, fontSize: '1.1rem', fontFamily: "'Geist Mono', monospace",
+                                color: timeLeft < 60 ? '#f87171' : timeLeft < 300 ? '#fbbf24' : 'var(--dk-text)',
                                 display: 'flex', alignItems: 'center', gap: '6px',
                                 animation: timeLeft < 60 && timeLeft > 0 ? 'pulse 1s infinite' : 'none',
-                                minWidth: '80px', justifyContent: 'center'
+                                minWidth: '80px', justifyContent: 'center',
+                                border: `1px solid ${timeLeft < 60 ? 'rgba(248,113,113,0.3)' : 'var(--dk-border)'}`,
                             }}>
                                 <Clock size={14} />
                                 {formatTime(timeLeft)}
@@ -808,28 +913,31 @@ class Solution:
 
                     {/* Timer progress bar */}
                     {totalTimeLimit > 0 && (
-                        <div style={{ height: '3px', background: 'var(--border)', flexShrink: 0 }}>
+                        <div style={{ height: '3px', background: 'rgba(255,255,255,0.04)', flexShrink: 0 }}>
                             <div style={{
                                 height: '100%', transition: 'width 1s linear',
                                 width: `${(timeLeft / totalTimeLimit) * 100}%`,
-                                background: timeLeft < 60 ? 'var(--danger)' : timeLeft < 300 ? 'var(--warning)' : 'var(--primary)'
+                                background: timeLeft < 60 ? '#f87171' : timeLeft < 300 ? '#fbbf24' : 'var(--dk-primary)'
                             }} />
                         </div>
                     )}
 
                     <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
                         {/* Left Panel — Problem Description */}
-                        <div style={{
-                            width: showProctor ? '35%' : '40%', padding: '16px', borderRight: '1px solid var(--border)',
-                            display: 'flex', flexDirection: 'column', background: 'var(--bg-surface)', overflow: 'hidden',
-                            transition: 'width 0.3s'
-                        }}>
+                        <motion.div
+                            initial={{ opacity: 0, x: -30 }} animate={{ opacity: 1, x: 0 }}
+                            transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+                            style={{
+                                width: showProctor ? '35%' : '40%', padding: '16px', borderRight: '1px solid var(--dk-border)',
+                                display: 'flex', flexDirection: 'column', background: 'rgba(5,5,12,0.6)', overflow: 'hidden',
+                                transition: 'width 0.3s'
+                            }}>
 
                             {/* Question Navigation */}
                             {batchQuestions.length > 0 && (
-                                <div className="card card-body" style={{ marginBottom: '16px', padding: '16px' }}>
+                                <div className="dk-card" style={{ marginBottom: '16px', padding: '16px' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '12px' }}>
-                                        <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--text-secondary)' }}>
+                                        <span style={{ fontSize: '0.85rem', fontWeight: 600, color: 'var(--dk-text-sub)' }}>
                                             Question {currentQuestionIndex + 1} of {batchQuestions.length}
                                         </span>
                                         {questionBadge && <span className={questionBadge.cls}>{questionBadge.label}</span>}
@@ -837,12 +945,11 @@ class Solution:
 
                                     <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: '6px' }}>
                                         {batchQuestions.map((q, idx) => {
-                                            const badge = getQuestionTypeBadge(q.question_type)
                                             return (
                                                 <button
                                                     key={idx}
                                                     onClick={() => loadQuestion(idx)}
-                                                    className={idx === currentQuestionIndex ? 'btn btn-primary btn-sm' : 'btn btn-secondary btn-sm'}
+                                                    className={idx === currentQuestionIndex ? 'dk-btn dk-btn-primary dk-btn-sm' : 'dk-btn dk-btn-ghost dk-btn-sm'}
                                                     style={{ justifyContent: 'center' }}
                                                 >
                                                     {idx + 1}
@@ -853,11 +960,11 @@ class Solution:
 
                                     <div style={{ display: 'flex', gap: '8px', marginTop: '12px' }}>
                                         <button onClick={goToPreviousQuestion} disabled={currentQuestionIndex === 0}
-                                            className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
+                                            className="dk-btn dk-btn-ghost dk-btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
                                             ← Previous
                                         </button>
                                         <button onClick={goToNextQuestion} disabled={currentQuestionIndex === batchQuestions.length - 1}
-                                            className="btn btn-secondary btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
+                                            className="dk-btn dk-btn-ghost dk-btn-sm" style={{ flex: 1, justifyContent: 'center' }}>
                                             Next →
                                         </button>
                                     </div>
@@ -865,22 +972,22 @@ class Solution:
                             )}
 
                             {/* Problem Description */}
-                            <div className="card card-body" style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
-                                <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--primary)', marginBottom: '16px' }}>{scenario.title}</h3>
-                                <div style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', lineHeight: 1.7 }}>
+                            <div className="dk-card" style={{ flex: 1, overflowY: 'auto', padding: '20px' }}>
+                                <h3 style={{ fontSize: '1rem', fontWeight: 700, color: 'var(--dk-primary-light)', marginBottom: '16px' }}>{scenario.title}</h3>
+                                <div style={{ fontSize: '0.85rem', color: 'var(--dk-text-sub)', lineHeight: 1.7 }}>
                                     {scenario.description.split('\n').map((line, i) => {
                                         if (line.startsWith('## ')) {
-                                            return <h4 key={i} style={{ color: 'var(--primary)', fontWeight: 600, marginTop: '16px', marginBottom: '8px' }}>{line.replace('## ', '')}</h4>
+                                            return <h4 key={i} style={{ color: 'var(--dk-primary-light)', fontWeight: 600, marginTop: '16px', marginBottom: '8px' }}>{line.replace('## ', '')}</h4>
                                         } else if (line.startsWith('**') && line.endsWith('**')) {
-                                            return <p key={i} style={{ fontWeight: 600, color: 'var(--text-primary)' }}>{line.replace(/\*\*/g, '')}</p>
+                                            return <p key={i} style={{ fontWeight: 600, color: 'var(--dk-text)' }}>{line.replace(/\*\*/g, '')}</p>
                                         } else if (line.startsWith('- ')) {
-                                            return <p key={i} style={{ paddingLeft: '16px', color: 'var(--text-secondary)' }}>• {line.replace('- ', '')}</p>
+                                            return <p key={i} style={{ paddingLeft: '16px', color: 'var(--dk-text-sub)' }}>• {line.replace('- ', '')}</p>
                                         } else if (line.startsWith('Input:') || line.startsWith('Output:') || line.startsWith('Explanation:')) {
                                             const [label, ...rest] = line.split(':')
                                             return (
-                                                <p key={i} style={{ fontFamily: 'monospace', fontSize: '0.85rem' }}>
-                                                    <span style={{ color: '#7C3AED', fontWeight: 600 }}>{label}:</span>
-                                                    <span style={{ color: 'var(--success)' }}>{rest.join(':')}</span>
+                                                <p key={i} style={{ fontFamily: "'Geist Mono', monospace", fontSize: '0.85rem' }}>
+                                                    <span style={{ color: '#a855f7', fontWeight: 600 }}>{label}:</span>
+                                                    <span style={{ color: '#4ade80' }}>{rest.join(':')}</span>
                                                 </p>
                                             )
                                         } else if (line.trim()) {
@@ -892,115 +999,135 @@ class Solution:
                             </div>
 
                             {/* Live Telemetry */}
-                            <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--border)' }}>
-                                <h4 style={{ fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Live Telemetry</h4>
+                            <div style={{ marginTop: '16px', paddingTop: '16px', borderTop: '1px solid var(--dk-border)' }}>
+                                <h4 style={{ fontSize: '0.7rem', color: 'var(--dk-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '8px' }}>Live Telemetry</h4>
                                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '10px' }}>
-                                    <div className="card" style={{ textAlign: 'center', padding: '12px' }}>
-                                        <div style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--warning)' }}>{runCount}</div>
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Runs (this Q)</div>
+                                    <div className="dk-card" style={{ textAlign: 'center', padding: '12px' }}>
+                                        <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#fbbf24' }}>{runCount}</div>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--dk-text-muted)' }}>Runs (this Q)</div>
                                     </div>
-                                    <div className="card" style={{ textAlign: 'center', padding: '12px' }}>
-                                        <div style={{ fontSize: '1.3rem', fontWeight: 800, color: 'var(--danger)' }}>{sessionLogs.length}</div>
-                                        <div style={{ fontSize: '0.7rem', color: 'var(--text-muted)' }}>Errors (this Q)</div>
+                                    <div className="dk-card" style={{ textAlign: 'center', padding: '12px' }}>
+                                        <div style={{ fontSize: '1.3rem', fontWeight: 800, color: '#f87171' }}>{sessionLogs.length}</div>
+                                        <div style={{ fontSize: '0.7rem', color: 'var(--dk-text-muted)' }}>Errors (this Q)</div>
                                     </div>
                                 </div>
                                 {batchQuestions.length > 1 && (
-                                    <div style={{ marginTop: '8px', fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                                    <div style={{ marginTop: '8px', fontSize: '0.75rem', color: 'var(--dk-text-muted)', textAlign: 'center' }}>
                                         Total: {perQuestionRunCount.reduce((a, b) => a + b, 0)} runs, {perQuestionLogs.reduce((a, b) => a + b.length, 0)} errors across all questions
                                     </div>
                                 )}
                             </div>
 
-                            <button onClick={resetAll} className="btn btn-secondary btn-sm" style={{ marginTop: '12px', justifyContent: 'center', width: '100%' }}>
+                            <button onClick={resetAll} className="dk-btn dk-btn-ghost dk-btn-sm" style={{ marginTop: '12px', justifyContent: 'center', width: '100%' }}>
                                 ← Back to Home
                             </button>
-                        </div>
+                        </motion.div>
 
                         {/* Middle Panel — Code Editor + Terminal */}
-                        <div style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}>
+                        <motion.div
+                            initial={{ opacity: 0 }} animate={{ opacity: 1 }}
+                            transition={{ duration: 0.4, delay: 0.1 }}
+                            style={{ flex: 1, display: 'flex', flexDirection: 'column', minWidth: 0 }}
+                        >
                             {/* Toolbar */}
                             <div style={{
                                 display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                                padding: '10px 16px', background: 'var(--bg-surface)', borderBottom: '1px solid var(--border)'
+                                padding: '10px 16px', background: 'rgba(5,5,12,0.8)', borderBottom: '1px solid var(--dk-border)',
+                                backdropFilter: 'blur(8px)',
                             }}>
                                 <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                    <Terminal size={16} style={{ color: 'var(--text-muted)' }} />
-                                    <span style={{ fontSize: '0.85rem', color: 'var(--text-secondary)', fontWeight: 500 }}>solution.py</span>
+                                    <Terminal size={16} style={{ color: 'var(--dk-text-muted)' }} />
+                                    <span style={{ fontSize: '0.85rem', color: 'var(--dk-text-sub)', fontWeight: 500, fontFamily: "'Geist Mono', monospace" }}>solution.py</span>
                                 </div>
                                 <div style={{ display: 'flex', gap: '8px' }}>
-                                    <button onClick={handleRunCode} disabled={isRunning || isSubmitting} className="btn btn-secondary btn-sm">
-                                        <Play size={14} style={{ color: 'var(--success)' }} />
+                                    <button onClick={handleRunCode} disabled={isRunning || isSubmitting} className="dk-btn dk-btn-ghost dk-btn-sm" style={{ gap: 6 }}>
+                                        <Play size={14} style={{ color: '#4ade80' }} />
                                         {isRunning ? 'Running...' : 'Run Code'}
                                     </button>
-                                    <button onClick={handleSubmitCode} disabled={isRunning || isSubmitting} className="btn btn-success btn-sm">
+                                    <button onClick={handleSubmitCode} disabled={isRunning || isSubmitting} className="dk-btn dk-btn-sm" style={{
+                                        background: 'rgba(74,222,128,0.12)', color: '#4ade80', border: '1px solid rgba(74,222,128,0.25)', gap: 6,
+                                    }}>
                                         <Send size={14} />
                                         {isSubmitting ? 'Judging...' : 'Submit'}
                                     </button>
-                                    <button onClick={handleEvaluate} disabled={isEvaluating} className="btn btn-primary btn-sm">
+                                    <button onClick={handleEvaluate} disabled={isEvaluating} className="dk-btn dk-btn-sm dk-ai-evaluate-btn" style={{
+                                        background: 'linear-gradient(135deg, #6366f1, #a855f7)', color: '#fff',
+                                        border: 'none', boxShadow: '0 4px 20px rgba(99,102,241,0.3)', gap: 6,
+                                    }}>
                                         <CheckCircle size={14} />
-                                        {isEvaluating ? 'Analyzing...' : 'AI Evaluate'}
+                                        {isEvaluating ? 'Analyzing...' : '🤖 AI Evaluate'}
                                     </button>
                                 </div>
                             </div>
 
                             {/* Monaco Editor */}
-                            <div style={{ flex: 1 }}>
+                            <div className="dk-editor-wrap" style={{ flex: 1 }}>
                                 <Editor
                                     height="100%"
                                     defaultLanguage="python"
-                                    theme="vs-light"
+                                    theme="vs-dark"
                                     key={`editor-q${currentQuestionIndex}`}
                                     defaultValue={scenario.userCode}
                                     onMount={handleEditorMount}
-                                    options={{ minimap: { enabled: false }, fontSize: 14, padding: { top: 16 }, scrollBeyondLastLine: false }}
+                                    options={{
+                                        minimap: { enabled: false }, fontSize: 14,
+                                        fontFamily: "'Geist Mono', 'Fira Code', monospace",
+                                        padding: { top: 16 }, scrollBeyondLastLine: false,
+                                        smoothScrolling: true, cursorBlinking: 'smooth',
+                                        cursorSmoothCaretAnimation: 'on',
+                                    }}
                                 />
                             </div>
 
                             {/* Terminal Output */}
                             <div style={{
-                                height: '200px', background: '#1e1e2e', borderTop: '1px solid var(--border)',
+                                height: '200px', background: '#0a0a12', borderTop: '1px solid var(--dk-border)',
                                 padding: '16px', overflowY: 'auto'
                             }}>
-                                <div style={{ fontSize: '0.7rem', color: '#9CA3AF', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
+                                <div style={{ fontSize: '0.7rem', color: '#64748b', marginBottom: '8px', textTransform: 'uppercase', letterSpacing: '0.05em', fontWeight: 700, display: 'flex', alignItems: 'center', gap: '6px' }}>
                                     <Terminal size={12} /> Test Results
                                 </div>
-                                <pre style={{ fontSize: '0.8rem', fontFamily: "'JetBrains Mono', 'Fira Code', monospace", whiteSpace: 'pre-wrap', margin: 0 }}>
+                                <pre style={{ fontSize: '0.8rem', fontFamily: "'Geist Mono', 'Fira Code', monospace", whiteSpace: 'pre-wrap', margin: 0 }}>
                                     {output.split('\n').map((line, i) => {
                                         if (line.startsWith('--- Sample Test') || line.startsWith('--- Test')) {
                                             return <div key={i} style={{ color: '#60A5FA', fontWeight: 700, marginTop: '8px' }}>{line}</div>
                                         } else if (line.startsWith('Input:')) {
-                                            return <div key={i} style={{ color: '#9CA3AF' }}>{line}</div>
+                                            return <div key={i} style={{ color: '#64748b' }}>{line}</div>
                                         } else if (line.startsWith('Expected:')) {
-                                            return <div key={i} style={{ color: '#FBBF24' }}>{line}</div>
+                                            return <div key={i} style={{ color: '#fbbf24' }}>{line}</div>
                                         } else if (line.startsWith('Actual:')) {
                                             const hasError = line.includes('ERROR') || line.includes('None')
-                                            return <div key={i} style={{ color: hasError ? '#F87171' : '#22D3EE' }}>{line}</div>
+                                            return <div key={i} style={{ color: hasError ? '#f87171' : '#22d3ee' }}>{line}</div>
                                         } else if (line.includes('Status: PASS') || line.includes('PASS')) {
-                                            return <div key={i} style={{ color: '#34D399', fontWeight: 600 }}>{line}</div>
+                                            return <div key={i} style={{ color: '#4ade80', fontWeight: 600 }}>{line}</div>
                                         } else if (line.includes('Status: FAIL') || line.includes('FAIL') || line.includes('Wrong Answer')) {
-                                            return <div key={i} style={{ color: '#F87171', fontWeight: 600 }}>{line}</div>
+                                            return <div key={i} style={{ color: '#f87171', fontWeight: 600 }}>{line}</div>
                                         } else if (line.includes('Accepted:') || line.includes('All test cases passed')) {
-                                            return <div key={i} style={{ color: '#34D399', fontWeight: 700, fontSize: '0.9rem', marginTop: '8px' }}>{line}</div>
+                                            return <div key={i} style={{ color: '#4ade80', fontWeight: 700, fontSize: '0.9rem', marginTop: '8px' }}>{line}</div>
                                         } else if (line.includes('Sample Tests:') || line.includes('Passed')) {
-                                            return <div key={i} style={{ color: '#FBBF24', fontWeight: 700 }}>{line}</div>
+                                            return <div key={i} style={{ color: '#fbbf24', fontWeight: 700 }}>{line}</div>
                                         } else if (line.startsWith('=')) {
-                                            return <div key={i} style={{ color: '#4B5563' }}>{line}</div>
+                                            return <div key={i} style={{ color: '#1e293b' }}>{line}</div>
                                         } else if (line.includes('ERROR') || line.includes('Runtime Error') || line.includes('Error:')) {
-                                            return <div key={i} style={{ color: '#F87171' }}>{line}</div>
+                                            return <div key={i} style={{ color: '#f87171' }}>{line}</div>
                                         }
-                                        return <div key={i} style={{ color: '#D1D5DB' }}>{line}</div>
+                                        return <div key={i} style={{ color: '#94a3b8' }}>{line}</div>
                                     })}
                                 </pre>
                             </div>
-                        </div>
+                        </motion.div>
 
                         {/* Right Panel — Proctor Webcam */}
                         {showProctor && (
-                            <div style={{
-                                width: '240px', flexShrink: 0, display: 'flex', flexDirection: 'column',
-                                gap: '8px', padding: '12px', background: 'var(--bg-surface)',
-                                borderLeft: '1px solid var(--border)', overflow: 'hidden'
-                            }}>
+                            <motion.div
+                                initial={{ opacity: 0, x: 30 }} animate={{ opacity: 1, x: 0 }}
+                                transition={{ duration: 0.5, delay: 0.2, ease: [0.16, 1, 0.3, 1] }}
+                                style={{
+                                    width: '240px', flexShrink: 0, display: 'flex', flexDirection: 'column',
+                                    gap: '8px', padding: '12px', background: 'rgba(5,5,12,0.6)',
+                                    borderLeft: '1px solid var(--dk-border)', overflow: 'hidden'
+                                }}
+                            >
                                 <div style={{ position: 'sticky', top: 0 }}>
                                     <Proctor
                                         ref={proctorRef}
@@ -1011,14 +1138,14 @@ class Solution:
                                         <ProctorStats proctorData={proctorData} />
                                     </div>
                                     <button
-                                        className="btn btn-secondary btn-sm"
+                                        className="dk-btn dk-btn-ghost dk-btn-sm"
                                         onClick={() => setShowProctor(false)}
                                         style={{ width: '100%', marginTop: '8px', fontSize: '0.65rem', justifyContent: 'center' }}
                                     >
                                         <EyeOff size={12} /> Hide Camera
                                     </button>
                                 </div>
-                            </div>
+                            </motion.div>
                         )}
                         {/* Floating proctor toggle when hidden */}
                         {!showProctor && (
@@ -1026,10 +1153,13 @@ class Solution:
                                 onClick={() => setShowProctor(true)}
                                 style={{
                                     position: 'fixed', bottom: 20, right: 20, zIndex: 50,
-                                    width: 48, height: 48, borderRadius: '50%', border: 'none',
-                                    background: proctorData?.faceDetected ? 'var(--success)' : 'var(--danger)',
-                                    color: '#fff', fontSize: 18, cursor: 'pointer',
-                                    boxShadow: '0 4px 20px rgba(0,0,0,0.3)', transition: 'all 0.2s',
+                                    width: 48, height: 48, borderRadius: '50%',
+                                    border: '1px solid var(--dk-border)',
+                                    background: proctorData?.faceDetected ? 'rgba(74,222,128,0.15)' : 'rgba(248,113,113,0.15)',
+                                    color: proctorData?.faceDetected ? '#4ade80' : '#f87171',
+                                    fontSize: 18, cursor: 'pointer',
+                                    boxShadow: `0 4px 20px ${proctorData?.faceDetected ? 'rgba(74,222,128,0.2)' : 'rgba(248,113,113,0.2)'}`,
+                                    transition: 'all 0.2s',
                                     display: 'flex', alignItems: 'center', justifyContent: 'center'
                                 }}
                                 title="Show proctor camera"
@@ -1038,8 +1168,8 @@ class Solution:
                             </button>
                         )}
                     </div> {/* end flex row */}
-                </div>
-            </div>
+                </div >
+            </DarkLayout >
         )
     }
 
@@ -1048,30 +1178,33 @@ class Solution:
     // ════════════════════════════════════════════════════════════
 
     return (
-        <div className="page-layout">
-            <Sidebar />
-            <div className="main-content fade-in">
-                <div className="page-header">
-                    <h1>💻 Coding Skills Assessment</h1>
+        <DarkLayout>
+            <div className="dk-page">
+                <div className="dk-page-header">
+                    <h1>💻 Coding Skills</h1>
                     <p>Upload any technical document or paste a URL. AI generates bespoke coding challenges that measure real cognitive skills.</p>
                 </div>
 
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 2fr', gap: '24px' }}>
                     {/* Left: Upload Section */}
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-                        <div className="card card-body">
+                    <div className="dk-stagger-grid" style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
+                        <div className="dk-spotlight-card">
                             <h2 style={{ fontSize: '1.1rem', fontWeight: 700, marginBottom: '16px', display: 'flex', alignItems: 'center', gap: '8px' }}>
                                 <Zap style={{ color: 'var(--warning)' }} size={20} />
                                 Ingest Study Material
                             </h2>
 
-                            {/* File Upload */}
-                            <label className="upload-zone" style={{ padding: '32px 24px', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-                                <Upload style={{ color: 'var(--text-muted)', marginBottom: '12px' }} size={32} />
-                                <span style={{ fontSize: '0.875rem', color: 'var(--text-secondary)', textAlign: 'center' }}>
+                            {/* Marching ants upload zone */}
+                            <label className="dk-upload-marching" style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', cursor: isAnalyzing ? 'not-allowed' : 'pointer' }}>
+                                {/* SVG border */}
+                                <svg className="march-border" aria-hidden="true">
+                                    <rect x="1" y="1" width="calc(100% - 2px)" height="calc(100% - 2px)" rx="18" ry="18" />
+                                </svg>
+                                <Upload style={{ color: 'var(--dk-primary-light)', marginBottom: '12px' }} size={32} />
+                                <span style={{ fontSize: '0.875rem', color: 'var(--dk-text-sub)', textAlign: 'center', fontWeight: 600 }}>
                                     Upload PDF or Text File
                                 </span>
-                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>Textbooks, articles, docs</span>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--dk-text-muted)', marginTop: '4px' }}>Textbooks, articles, docs</span>
                                 <input
                                     type="file"
                                     style={{ display: 'none' }}
@@ -1083,76 +1216,77 @@ class Solution:
 
                             {/* Divider */}
                             <div style={{ display: 'flex', alignItems: 'center', gap: '16px', margin: '20px 0' }}>
-                                <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
-                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>or</span>
-                                <div style={{ flex: 1, height: '1px', background: 'var(--border)' }}></div>
+                                <div style={{ flex: 1, height: '1px', background: 'var(--dk-border)' }}></div>
+                                <span style={{ fontSize: '0.75rem', color: 'var(--dk-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>or</span>
+                                <div style={{ flex: 1, height: '1px', background: 'var(--dk-border)' }}></div>
                             </div>
 
                             {/* URL Input */}
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-                                <div style={{ display: 'flex', borderRadius: 'var(--radius-md)', border: '1px solid var(--border)', overflow: 'hidden' }}>
-                                    <div style={{ padding: '0 12px', display: 'flex', alignItems: 'center', background: 'var(--bg-input)', borderRight: '1px solid var(--border)' }}>
-                                        <Link size={16} style={{ color: 'var(--text-muted)' }} />
+                                <div style={{ display: 'flex', borderRadius: 14, border: '1px solid var(--dk-border)', overflow: 'hidden', background: 'rgba(255,255,255,0.04)' }}>
+                                    <div style={{ padding: '0 12px', display: 'flex', alignItems: 'center', borderRight: '1px solid var(--dk-border)' }}>
+                                        <Link size={16} style={{ color: 'var(--dk-text-muted)' }} />
                                     </div>
                                     <input
                                         type="text"
                                         placeholder="Paste GeeksForGeeks URL..."
-                                        className="form-input"
-                                        style={{ border: 'none', borderRadius: 0 }}
+                                        className="dk-input"
+                                        style={{ border: 'none', borderRadius: 0, background: 'transparent', flex: 1 }}
                                         value={urlInput}
                                         onChange={(e) => setUrlInput(e.target.value)}
                                         disabled={isAnalyzing}
                                     />
                                 </div>
-                                <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', textAlign: 'center' }}>
+                                <p style={{ fontSize: '0.75rem', color: 'var(--dk-text-muted)', textAlign: 'center' }}>
                                     Generates 4 challenge types: Scratch • Debug • Syntax Fix • Optimization
                                 </p>
-                                <button onClick={handleUrlAnalysis} disabled={isAnalyzing || !urlInput.trim()} className="btn btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
-                                    {isAnalyzing ? "Generating 4 Challenges..." : "🤖 Generate Assessment"}
+                                <button onClick={handleUrlAnalysis} disabled={isAnalyzing || !urlInput.trim()} className="dk-btn-glow" style={{ width: '100%', justifyContent: 'center' }}>
+                                    {isAnalyzing ? "⏳ Generating 4 Challenges..." : "🤖 Generate Assessment"}
                                 </button>
                             </div>
                         </div>
 
                         {/* Quick Start */}
-                        <button onClick={startCodingChallenge} className="card card-body" style={{
+                        <button onClick={startCodingChallenge} className="dk-spotlight-card" style={{
                             display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-                            cursor: 'pointer', border: '1px solid var(--border)', background: 'var(--bg-card)',
-                            textAlign: 'left', width: '100%'
+                            cursor: 'pointer', background: 'var(--dk-surface)',
+                            textAlign: 'left', width: '100%', border: '1px solid var(--dk-border)',
+                            padding: '18px 20px',
                         }}>
                             <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
-                                <Code style={{ color: 'var(--success)' }} size={20} />
-                                <span style={{ fontWeight: 600 }}>Try Demo Challenge</span>
+                                <Code style={{ color: 'var(--dk-green)' }} size={20} />
+                                <span style={{ fontWeight: 600, color: 'var(--dk-text)' }}>Try Demo Challenge</span>
                             </div>
-                            <ArrowRight size={18} style={{ color: 'var(--text-muted)' }} />
+                            <ArrowRight size={18} style={{ color: 'var(--dk-text-muted)' }} />
                         </button>
                     </div>
 
                     {/* Right: Results Section */}
                     <div>
                         {isAnalyzing ? (
-                            <div className="card card-body" style={{ textAlign: 'center', padding: '64px 32px' }}>
-                                <Loader2 className="spinner" style={{ margin: '0 auto 16px', width: '48px', height: '48px' }} size={48} />
-                                <p style={{ fontSize: '1.1rem', fontWeight: 600 }}>Processing Document...</p>
-                                <p style={{ fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '8px' }}>AI is generating sample + comprehensive test suites</p>
+                            <div className="dk-card" style={{ textAlign: 'center', padding: '64px 32px' }}>
+                                <Loader2 className="spinner" style={{ margin: '0 auto 16px', width: '48px', height: '48px', color: 'var(--dk-primary)' }} size={48} />
+                                <p style={{ fontSize: '1.1rem', fontWeight: 600, color: 'var(--dk-text)' }}>Processing Document...</p>
+                                <p style={{ fontSize: '0.85rem', color: 'var(--dk-text-muted)', marginTop: '8px' }}>AI is generating sample + comprehensive test suites</p>
                             </div>
                         ) : error ? (
-                            <div className="alert alert-error" style={{ textAlign: 'center', padding: '32px', flexDirection: 'column', alignItems: 'center' }}>
+                            <div className="dk-alert dk-alert-error" style={{ textAlign: 'center', padding: '32px', flexDirection: 'column', alignItems: 'center', display: 'flex' }}>
                                 <p style={{ fontWeight: 600, marginBottom: '8px' }}>Analysis Failed</p>
                                 <p style={{ fontSize: '0.85rem', opacity: 0.8 }}>{error}</p>
-                                <button onClick={() => setError(null)} style={{ marginTop: '12px', fontSize: '0.85rem', color: 'var(--danger)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
+                                <button onClick={() => setError(null)} style={{ marginTop: '12px', fontSize: '0.85rem', color: 'var(--dk-primary-light)', background: 'none', border: 'none', cursor: 'pointer', textDecoration: 'underline' }}>
                                     Try Again
                                 </button>
                             </div>
                         ) : analysis ? (
                             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                                 {/* Assessment Header */}
-                                <div className="card card-body" style={{ borderTop: '4px solid var(--primary)' }}>
+                                <div className="dk-card" style={{ borderTop: '3px solid var(--dk-primary)', padding: '24px' }}>
                                     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: '16px' }}>
                                         <div>
                                             <span className="badge badge-primary" style={{ textTransform: 'uppercase', letterSpacing: '0.05em' }}>
                                                 📚 {analysis.topic || "Assessment"}
                                             </span>
-                                            <h2 style={{ fontSize: '1.5rem', fontWeight: 800, marginTop: '12px' }}>
+                                            <h2 style={{ fontSize: '1.5rem', fontWeight: 800, marginTop: '12px', color: 'var(--dk-text)' }}>
                                                 {batchQuestions.length} Questions Generated
                                             </h2>
                                         </div>
@@ -1160,21 +1294,20 @@ class Solution:
                                             <ShieldCheck size={16} /> {analysis.estimated_time_minutes || 45} min
                                         </div>
                                     </div>
-
                                     {batchQuestions.length > 0 && (
                                         <div style={{ marginTop: '16px' }}>
-                                            <h3 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px' }}>Challenge Types</h3>
+                                            <h3 style={{ fontSize: '0.75rem', fontWeight: 700, color: 'var(--dk-text-muted)', textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: '12px' }}>Challenge Types</h3>
                                             <div className="grid-2">
                                                 {batchQuestions.map((q, idx) => {
                                                     const badge = getQuestionTypeBadge(q.question_type)
                                                     return (
-                                                        <div key={idx} className="card card-body" style={{ padding: '16px' }}>
+                                                        <div key={idx} className="dk-card" style={{ padding: '16px' }}>
                                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px' }}>
                                                                 <span className={badge.cls}>{badge.label}</span>
-                                                                <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{q.time_limit_minutes} min</span>
+                                                                <span style={{ fontSize: '0.75rem', color: 'var(--dk-text-muted)' }}>{q.time_limit_minutes} min</span>
                                                             </div>
-                                                            <p style={{ fontWeight: 600, fontSize: '0.9rem' }}>{q.title}</p>
-                                                            <p style={{ fontSize: '0.75rem', color: 'var(--text-muted)', marginTop: '4px' }}>{q.difficulty}</p>
+                                                            <p style={{ fontWeight: 600, fontSize: '0.9rem', color: 'var(--dk-text)' }}>{q.title}</p>
+                                                            <p style={{ fontSize: '0.75rem', color: 'var(--dk-text-muted)', marginTop: '4px' }}>{q.difficulty}</p>
                                                         </div>
                                                     )
                                                 })}
@@ -1184,38 +1317,44 @@ class Solution:
                                 </div>
 
                                 {/* Assessment Overview */}
-                                <div className="card card-body">
-                                    <h3 style={{ fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px' }}>
-                                        <Target size={18} style={{ color: '#7C3AED' }} /> Assessment Overview
+                                <div className="dk-card" style={{ padding: '24px' }}>
+                                    <h3 style={{ fontWeight: 700, marginBottom: '12px', display: 'flex', alignItems: 'center', gap: '8px', color: 'var(--dk-text)' }}>
+                                        <Target size={18} style={{ color: '#a855f7' }} /> Assessment Overview
                                     </h3>
                                     <div className="grid-2">
-                                        <div className="card card-body" style={{ padding: '16px' }}>
+                                        <div className="dk-card" style={{ padding: '16px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                                                <Play size={14} style={{ color: 'var(--success)' }} />
-                                                <span style={{ fontWeight: 600, color: 'var(--success)', fontSize: '0.85rem' }}>Run Code</span>
+                                                <Play size={14} style={{ color: 'var(--dk-green)' }} />
+                                                <span style={{ fontWeight: 600, color: 'var(--dk-green)', fontSize: '0.85rem' }}>Run Code</span>
                                             </div>
-                                            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>3 sample test cases per question</p>
+                                            <p style={{ fontSize: '0.8rem', color: 'var(--dk-text-sub)' }}>3 sample test cases per question</p>
                                         </div>
-                                        <div className="card card-body" style={{ padding: '16px' }}>
+                                        <div className="dk-card" style={{ padding: '16px' }}>
                                             <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '6px' }}>
-                                                <Send size={14} style={{ color: 'var(--primary)' }} />
-                                                <span style={{ fontWeight: 600, color: 'var(--primary)', fontSize: '0.85rem' }}>Submit</span>
+                                                <Send size={14} style={{ color: 'var(--dk-primary-light)' }} />
+                                                <span style={{ fontWeight: 600, color: 'var(--dk-primary-light)', fontSize: '0.85rem' }}>Submit</span>
                                             </div>
-                                            <p style={{ fontSize: '0.8rem', color: 'var(--text-secondary)' }}>20+ comprehensive tests per question</p>
+                                            <p style={{ fontSize: '0.8rem', color: 'var(--dk-text-sub)' }}>20+ comprehensive tests per question</p>
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Start Button */}
-                                <button onClick={startCodingChallenge} className="btn btn-success btn-lg" style={{ width: '100%', justifyContent: 'center', gap: '12px' }}>
+                                <button onClick={startCodingChallenge} className="dk-btn-glow" style={{ width: '100%', justifyContent: 'center', gap: '12px', fontSize: '1rem', padding: '16px 0' }}>
                                     <Play size={22} /> Start Coding Challenge
                                 </button>
                             </div>
                         ) : (
-                            <div className="card" style={{ borderStyle: 'dashed', textAlign: 'center', padding: '64px' }}>
-                                <Brain style={{ margin: '0 auto 16px', color: 'var(--text-muted)' }} size={48} />
-                                <p style={{ color: 'var(--text-secondary)', fontSize: '1.1rem' }}>Upload a document or paste a URL</p>
-                                <p style={{ color: 'var(--text-muted)', fontSize: '0.85rem', marginTop: '8px' }}>
+                            <div className="dk-card" style={{ textAlign: 'center', padding: '64px 32px' }}>
+                                {/* Floating brain idle icon */}
+                                <div className="dk-brain-idle" style={{ marginBottom: 24 }}>
+                                    <Brain style={{ color: '#6366f1' }} size={64} />
+                                </div>
+                                <p style={{ color: 'var(--dk-text)', fontSize: '1.1rem', fontWeight: 600 }}>AI is waiting for input</p>
+                                <p style={{ color: 'var(--dk-text-muted)', fontSize: '0.85rem', marginTop: '8px' }}>
+                                    Upload a document or paste a URL to generate challenges
+                                </p>
+                                <p style={{ color: 'var(--dk-text-muted)', fontSize: '0.78rem', marginTop: '4px' }}>
                                     AI will generate sample tests + 50 comprehensive edge cases
                                 </p>
                             </div>
@@ -1223,6 +1362,6 @@ class Solution:
                     </div>
                 </div>
             </div>
-        </div>
+        </DarkLayout>
     )
 }

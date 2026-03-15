@@ -11,6 +11,7 @@ import sys
 from google import genai
 from google.genai import types
 import json
+import traceback as _traceback
 import ast
 import hashlib
 import re
@@ -352,6 +353,172 @@ def _strip_solution_class_from_tests(test_code: str) -> str:
     return cleaned
 
 
+# ============================================================
+# ANTI-HALLUCINATION VALIDATION HELPERS
+# ============================================================
+
+def _compile_check_test_code(test_code: str, label: str = "test") -> str:
+    """
+    Compile-time validation of generated test code.
+    If the test code has syntax errors, return a known-good stub instead.
+    This catches bracket mismatches, undefined variables, and other
+    LLM hallucination artifacts BEFORE they reach the user at runtime.
+    """
+    if not test_code or not test_code.strip():
+        return test_code
+
+    # Build a minimal compilation context: the test code needs Solution to exist
+    # We provide a dummy Solution class so the compile check doesn't fail on that
+    compile_wrapper = (
+        "class Solution:\n"
+        "    def __getattr__(self, name): return lambda *a, **kw: None\n"
+        "\n" + test_code
+    )
+
+    try:
+        compile(compile_wrapper, f"<{label}>", "exec")
+        return test_code  # Compiles fine
+    except SyntaxError as e:
+        print(f"[COMPILE CHECK] {label} has SyntaxError at line {e.lineno}: {e.msg}")
+        print(f"[COMPILE CHECK] Attempting auto-fix...")
+
+        # Try the existing _fix_syntax_errors on the test code
+        fixed = _fix_syntax_errors(test_code)
+        fixed_wrapper = (
+            "class Solution:\n"
+            "    def __getattr__(self, name): return lambda *a, **kw: None\n"
+            "\n" + fixed
+        )
+        try:
+            compile(fixed_wrapper, f"<{label}_fixed>", "exec")
+            print(f"[COMPILE CHECK] Auto-fix succeeded for {label}")
+            return fixed
+        except SyntaxError as e2:
+            print(f"[COMPILE CHECK] Auto-fix also failed for {label}: {e2.msg}")
+            # Return a safe stub that won't crash
+            return (
+                "import sys\n"
+                "from typing import List, Optional, Dict, Set, Tuple, Any\n"
+                "\n"
+                "if __name__ == '__main__':\n"
+                "    print('Tests could not be generated. Please try again.')\n"
+                "    print('Wrong Answer: 0 / 1 testcases passed')\n"
+            )
+
+
+def _validate_compute_expected(test_code: str, label: str = "comprehensive_tests") -> None:
+    """
+    Check that comprehensive tests include a compute_expected() function.
+    If not, the AI likely hardcoded expected values — a hallucination risk.
+    This is a WARNING only (doesn't modify the code).
+    """
+    if not test_code:
+        return
+    if "def compute_expected" not in test_code:
+        print(f"[HALLUCINATION WARNING] {label} does NOT contain compute_expected(). "
+              f"Expected values may be hardcoded/hallucinated by the AI.")
+
+
+def _validate_batch_schema(parsed: dict, fallback_fn) -> dict:
+    """
+    Validate batch assessment response has exactly 4 questions with correct types.
+    Fills in missing questions from fallback if needed.
+    """
+    REQUIRED_TYPES = {"scratch", "logic_bug", "syntax_error", "optimization"}
+
+    questions = parsed.get("questions", [])
+    if not isinstance(questions, list):
+        print(f"[BATCH SCHEMA] 'questions' is not a list, using fallback")
+        return fallback_fn()
+
+    if len(questions) != 4:
+        print(f"[BATCH SCHEMA] Expected 4 questions, got {len(questions)}")
+
+    # Check each question has a valid type
+    found_types = set()
+    valid_questions = []
+    for i, q in enumerate(questions):
+        if not isinstance(q, dict):
+            print(f"[BATCH SCHEMA] Q{i+1} is not a dict, skipping")
+            continue
+        qtype = q.get("question_type", "")
+        if qtype not in REQUIRED_TYPES:
+            print(f"[BATCH SCHEMA] Q{i+1} has unknown type '{qtype}'")
+        else:
+            found_types.add(qtype)
+        valid_questions.append(q)
+
+    # Check for missing types
+    missing_types = REQUIRED_TYPES - found_types
+    if missing_types:
+        print(f"[BATCH SCHEMA] Missing question types: {missing_types}")
+        # Fill from fallback
+        fallback = fallback_fn()
+        fallback_questions = {q["question_type"]: q for q in fallback.get("questions", [])
+                              if isinstance(q, dict) and q.get("question_type") in missing_types}
+        for mtype in missing_types:
+            if mtype in fallback_questions:
+                valid_questions.append(fallback_questions[mtype])
+                print(f"[BATCH SCHEMA] Filled missing '{mtype}' from fallback")
+
+    # Ensure we have exactly 4 questions, trimming excess
+    if len(valid_questions) > 4:
+        # Keep one of each type, then fill remaining slots
+        by_type = {}
+        extras = []
+        for q in valid_questions:
+            qt = q.get("question_type", "")
+            if qt in REQUIRED_TYPES and qt not in by_type:
+                by_type[qt] = q
+            else:
+                extras.append(q)
+        valid_questions = list(by_type.values())
+        while len(valid_questions) < 4 and extras:
+            valid_questions.append(extras.pop(0))
+
+    parsed["questions"] = valid_questions[:4]
+
+    # Validate each question has required string fields
+    for i, q in enumerate(parsed["questions"]):
+        for field in ['user_code', 'sample_tests', 'comprehensive_tests',
+                      'title', 'description', 'question_type', 'difficulty']:
+            if field not in q or q[field] is None or not isinstance(q.get(field), str):
+                q[field] = q.get(field, '') or ''
+                if field in ('user_code', 'sample_tests', 'comprehensive_tests'):
+                    print(f"[BATCH SCHEMA] Q{i+1}: '{field}' was missing/None, set to empty")
+
+        for field in ['hints', 'tags']:
+            if field not in q or not isinstance(q.get(field), list):
+                q[field] = []
+
+        if 'time_limit_minutes' not in q or not isinstance(q.get('time_limit_minutes'), int):
+            q['time_limit_minutes'] = 12
+
+    return parsed
+
+
+def _clamp_eval_scores(result: dict) -> dict:
+    """
+    Ensure all evaluation score fields are integers in 0-100 range.
+    Missing or non-numeric fields get a default of 50.
+    """
+    score_fields = ["logic_score", "resilience_score", "clean_code_score", "debugging_score"]
+    for field in score_fields:
+        val = result.get(field, 50)
+        try:
+            val = int(float(val))
+        except (ValueError, TypeError):
+            print(f"[SCORE CLAMP] {field} was non-numeric ({repr(result.get(field))}), defaulting to 50")
+            val = 50
+        result[field] = max(0, min(100, val))
+
+    # Ensure executive_summary is a string
+    if not isinstance(result.get("executive_summary"), str):
+        result["executive_summary"] = str(result.get("executive_summary", "Evaluation complete."))
+
+    return result
+
+
 # ─── IMPORT SANITIZER ────────────────────────────────────────────────────────
 # Ensures that generated code always contains necessary imports.
 # The LLM sometimes forgets `from typing import ...` despite explicit prompts.
@@ -681,6 +848,10 @@ async def evaluate_submission(payload: SubmissionPayload):
         # Parse the AI response
         result = safe_json_loads(clean_json_string)
 
+        # --- ANTI-HALLUCINATION: Clamp all scores to integer 0-100 ---
+        result = _clamp_eval_scores(result)
+
+
         # --- SERVER-SIDE ENFORCEMENT: Hard cap if originality < 40 ---
         # Don't rely on the LLM alone — enforce the cap deterministically
         if originality_score < 40:
@@ -892,6 +1063,10 @@ async def batch_evaluate(payload: BatchEvalPayload):
 
         result = safe_json_loads(raw_text.strip())
 
+        # --- ANTI-HALLUCINATION: Clamp all scores to integer 0-100 ---
+        result = _clamp_eval_scores(result)
+
+
         # Server-side originality enforcement
         if originality_score < 40:
             print(f"[BATCH ORIGINALITY ENFORCEMENT] Score {originality_score}/100. Capping at 15.")
@@ -914,6 +1089,8 @@ async def batch_evaluate(payload: BatchEvalPayload):
         # --- PROCTORING INTEGRITY PENALTY ---
         if payload.proctoring_data:
             proctor_integrity = payload.proctoring_data.get("integrity_score", 100)
+            suspicion_score = payload.proctoring_data.get("suspicion_score", 0)
+
             if proctor_integrity < 40:
                 penalty = 0.70
                 print(f"[BATCH PROCTOR PENALTY] Integrity {proctor_integrity}% — 30% reduction")
@@ -927,12 +1104,26 @@ async def batch_evaluate(payload: BatchEvalPayload):
             else:
                 penalty = 1.0
 
-            if penalty < 1.0:
+            # Suspicion score amplifier
+            if suspicion_score >= 70:
+                suspicion_penalty = 0.80
+                print(f"[BATCH SUSPICION PENALTY] Score {suspicion_score}/100 — extra 20% reduction")
+                result["executive_summary"] = f"🚨 High suspicion score ({suspicion_score}/100). " + result.get("executive_summary", "")
+            elif suspicion_score >= 40:
+                suspicion_penalty = 0.90
+                print(f"[BATCH SUSPICION PENALTY] Score {suspicion_score}/100 — extra 10% reduction")
+            else:
+                suspicion_penalty = 1.0
+
+            combined_penalty = penalty * suspicion_penalty
+
+            if combined_penalty < 1.0:
                 for key in ["logic_score", "resilience_score", "clean_code_score", "debugging_score"]:
                     if key in result:
-                        result[key] = max(0, int(result[key] * penalty))
+                        result[key] = max(0, int(result[key] * combined_penalty))
 
             result["proctor_integrity"] = proctor_integrity
+            result["suspicion_score"] = suspicion_score
 
         return result
 
@@ -1782,7 +1973,19 @@ def analyze_with_gemini(text_content: str, source_type: str) -> dict:
                 parsed_response.get("user_code", ""), parsed_response["comprehensive_tests"]
             )
 
+        # --- ANTI-HALLUCINATION: Compile-time check of generated test code ---
+        if "sample_tests" in parsed_response and parsed_response["sample_tests"]:
+            parsed_response["sample_tests"] = _compile_check_test_code(
+                parsed_response["sample_tests"], "single_sample_tests"
+            )
+        if "comprehensive_tests" in parsed_response and parsed_response["comprehensive_tests"]:
+            _validate_compute_expected(parsed_response["comprehensive_tests"], "single_comprehensive_tests")
+            parsed_response["comprehensive_tests"] = _compile_check_test_code(
+                parsed_response["comprehensive_tests"], "single_comprehensive_tests"
+            )
+
         return parsed_response
+
 
     except json.JSONDecodeError as e:
         print(f"JSON Parsing Error: {e}")
@@ -2180,7 +2383,9 @@ def generate_batch_assessment(text_content: str, source_type: str) -> dict:
             print(f"Context around error: ...{repr(raw_text[start:end])}...")
             return get_fallback_batch_response()
 
-        # Validate we got 4 questions
+        # --- ANTI-HALLUCINATION: Validate batch schema (4 types) ---
+        parsed_response = _validate_batch_schema(parsed_response, get_fallback_batch_response)
+
         if "questions" in parsed_response and len(parsed_response["questions"]) == 4:
             print(f"Successfully generated batch assessment with 4 questions")
             for i, q in enumerate(parsed_response["questions"]):
@@ -2209,22 +2414,10 @@ def generate_batch_assessment(text_content: str, source_type: str) -> dict:
                         print(f"[SPOILER STRIP] Removed spoiler comments from {q.get('question_type')} question")
                     q["user_code"] = cleaned
 
-        # --- POST-PROCESSING: Ensure imports exist in all code fields ---
+        # --- POST-PROCESSING: Ensure imports + node classes + compile check ---
         if "questions" in parsed_response:
             for idx, q in enumerate(parsed_response["questions"]):
-                # Ensure all required string fields exist (prevent None/missing)
-                for field in ['user_code', 'sample_tests', 'comprehensive_tests',
-                              'title', 'description', 'question_type', 'difficulty']:
-                    if field not in q or q[field] is None:
-                        q[field] = q.get(field, '') or ''
-                        print(f"[VALIDATION] Q{idx+1}: Set missing '{field}' to empty string")
-
-                for field in ['hints', 'tags']:
-                    if field not in q or not isinstance(q.get(field), list):
-                        q[field] = q.get(field, []) or []
-
-                if 'time_limit_minutes' not in q or not isinstance(q.get('time_limit_minutes'), int):
-                    q['time_limit_minutes'] = 12  # safe default
+                q_label = f"batch_Q{idx+1}_{q.get('question_type', 'unknown')}"
 
                 if "user_code" in q and q["user_code"]:
                     q["user_code"] = _ensure_imports_in_code(q["user_code"])
@@ -2235,6 +2428,10 @@ def generate_batch_assessment(text_content: str, source_type: str) -> dict:
                     q["sample_tests"] = _ensure_node_class_in_tests(
                         q.get("user_code", ""), q["sample_tests"]
                     )
+                    # --- ANTI-HALLUCINATION: Compile check sample tests ---
+                    q["sample_tests"] = _compile_check_test_code(
+                        q["sample_tests"], f"{q_label}_sample"
+                    )
                 if "comprehensive_tests" in q and q["comprehensive_tests"]:
                     # Strip any duplicate Solution class from test scripts
                     q["comprehensive_tests"] = _strip_solution_class_from_tests(q["comprehensive_tests"])
@@ -2242,11 +2439,24 @@ def generate_batch_assessment(text_content: str, source_type: str) -> dict:
                     q["comprehensive_tests"] = _ensure_node_class_in_tests(
                         q.get("user_code", ""), q["comprehensive_tests"]
                     )
+                    # --- ANTI-HALLUCINATION: Validate compute_expected + compile check ---
+                    _validate_compute_expected(q["comprehensive_tests"], f"{q_label}_comprehensive")
+                    q["comprehensive_tests"] = _compile_check_test_code(
+                        q["comprehensive_tests"], f"{q_label}_comprehensive"
+                    )
 
         return parsed_response
 
     except Exception as e:
         print(f"Batch Generation Error: {type(e).__name__}: {e}")
+        print(f"Full traceback:")
+        _traceback.print_exc()
+        # Write error to file for debugging
+        import io
+        error_file = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "backend_final", "gemini_error.log")
+        with open(error_file, "w", encoding="utf-8") as f:
+            f.write(f"Error: {type(e).__name__}: {e}\n\n")
+            _traceback.print_exc(file=f)
         return get_fallback_batch_response()
 
 

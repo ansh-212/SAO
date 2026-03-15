@@ -1,0 +1,1045 @@
+/* ─── Dashboard Dark Theme ──────────────────────────────────────────────────
+   Scoped to .dark-app — does NOT affect existing light-mode authenticated
+   pages. Applied via DarkLayout.jsx wrapper around dashboards.
+   ──────────────────────────────────────────────────────────────────────── */
+
+.dark-app {
+    /* Core tokens */
+    --dk-bg: #05050a;
+    --dk-surface: rgba(255, 255, 255, 0.035);
+    --dk-surface-2: rgba(255, 255, 255, 0.06);
+    --dk-border: rgba(255, 255, 255, 0.08);
+    --dk-border-strong: rgba(99, 102, 241, 0.35);
+    --dk-primary: #6366f1;
+    --dk-primary-light: #818cf8;
+    --dk-accent: #a855f7;
+    --dk-cyan: #22d3ee;
+    --dk-green: #4ade80;
+    --dk-amber: #fbbf24;
+    --dk-red: #f87171;
+    --dk-text: #f1f5f9;
+    --dk-text-muted: #64748b;
+    --dk-text-sub: #94a3b8;
+    --dk-glass: rgba(10, 10, 20, 0.7);
+    --dk-glow: rgba(99, 102, 241, 0.30);
+    --dk-font: 'Space Grotesk', 'Inter', sans-serif;
+
+    font-family: var(--dk-font);
+    background: var(--dk-bg);
+    color: var(--dk-text);
+    min-height: 100vh;
+    cursor: default;
+}
+
+/* ─── Dark overrides for light-theme classes inside .dark-app ──────────── */
+.dark-app .page-container {
+    color: var(--dk-text);
+}
+
+.dark-app .card {
+    background: var(--dk-surface);
+    border-color: var(--dk-border);
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 8px 32px rgba(0, 0, 0, 0.4);
+    color: var(--dk-text);
+}
+
+.dark-app .card:hover {
+    border-color: rgba(99, 102, 241, 0.25);
+    box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.12), 0 12px 48px rgba(0, 0, 0, 0.5);
+}
+
+.dark-app .badge {
+    background: rgba(255, 255, 255, 0.06);
+    color: var(--dk-text-sub);
+    border-color: var(--dk-border);
+}
+
+.dark-app .btn {
+    font-family: var(--dk-font);
+}
+
+.dark-app .btn-primary,
+.dark-app .btn {
+    background: linear-gradient(135deg, var(--dk-primary), var(--dk-accent));
+    color: #fff;
+    box-shadow: 0 4px 24px rgba(99, 102, 241, 0.35);
+}
+
+.dark-app .btn-primary:hover:not(:disabled),
+.dark-app .btn:hover:not(:disabled) {
+    box-shadow: 0 8px 40px rgba(99, 102, 241, 0.5);
+    transform: translateY(-1px);
+    color: #fff;
+}
+
+.dark-app .btn-secondary {
+    background: var(--dk-surface-2);
+    color: var(--dk-text-sub);
+    border: 1px solid var(--dk-border);
+    box-shadow: none;
+}
+
+.dark-app .btn-secondary:hover:not(:disabled) {
+    background: var(--dk-surface);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: var(--dk-text);
+    box-shadow: none;
+    transform: none;
+}
+
+.dark-app .btn-success {
+    background: linear-gradient(135deg, #059669, #10b981);
+    color: #fff;
+    box-shadow: 0 4px 24px rgba(16, 185, 129, 0.35);
+}
+
+.dark-app h1,
+.dark-app h2,
+.dark-app h3,
+.dark-app h4,
+.dark-app h5,
+.dark-app h6 {
+    color: var(--dk-text);
+}
+
+.dark-app textarea,
+.dark-app input[type="text"],
+.dark-app select {
+    background: rgba(255, 255, 255, 0.05);
+    border-color: var(--dk-border);
+    color: var(--dk-text);
+}
+
+.dark-app textarea:focus,
+.dark-app input[type="text"]:focus {
+    border-color: var(--dk-primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+}
+
+/* ─── Glassmorphic Card ─────────────────────────────────────────────────── */
+.dk-card {
+    background: var(--dk-surface);
+    border: 1px solid var(--dk-border);
+    border-radius: 20px;
+    padding: 24px;
+    backdrop-filter: blur(20px) saturate(160%);
+    -webkit-backdrop-filter: blur(20px);
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 8px 32px rgba(0, 0, 0, 0.4);
+    transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.dk-card:hover {
+    border-color: rgba(99, 102, 241, 0.25);
+    box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.12), 0 12px 48px rgba(0, 0, 0, 0.5);
+}
+
+/* ─── Spotlight cursor-tracking on bento cards ─────────────────────────── */
+.dk-card-spotlight {
+    position: relative;
+    overflow: hidden;
+}
+
+.dk-card-spotlight::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(600px circle at var(--mx, 50%) var(--my, 50%), rgba(99, 102, 241, 0.08) 0%, rgba(168, 85, 247, 0.03) 30%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.4s ease;
+    pointer-events: none;
+    z-index: 0;
+}
+
+.dk-card-spotlight:hover::before {
+    opacity: 1;
+}
+
+.dk-card-spotlight>* {
+    position: relative;
+    z-index: 1;
+}
+
+/* Gradient top-edge accent */
+.dk-card-accent::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--dk-primary), transparent);
+}
+
+/* ─── Stat Cards ────────────────────────────────────────────────────────── */
+.dk-stat-card {
+    background: var(--dk-surface);
+    border: 1px solid var(--dk-border);
+    border-radius: 18px;
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    backdrop-filter: blur(20px);
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    box-shadow: 0 4px 24px rgba(0, 0, 0, 0.3);
+    position: relative;
+    overflow: hidden;
+}
+
+/* Spotlight on stat cards */
+.dk-stat-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(300px circle at var(--mx, 50%) var(--my, 50%), rgba(99, 102, 241, 0.10) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.35s ease;
+    pointer-events: none;
+}
+
+.dk-stat-card:hover::before {
+    opacity: 1;
+}
+
+.dk-stat-card:hover {
+    transform: translateY(-3px);
+    border-color: rgba(99, 102, 241, 0.3);
+    box-shadow: 0 12px 48px rgba(99, 102, 241, 0.15);
+}
+
+.dk-stat-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+}
+
+.dk-stat-icon.indigo {
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--dk-primary-light);
+}
+
+.dk-stat-icon.violet {
+    background: rgba(168, 85, 247, 0.15);
+    color: #c084fc;
+}
+
+.dk-stat-icon.cyan {
+    background: rgba(34, 211, 238, 0.12);
+    color: var(--dk-cyan);
+}
+
+.dk-stat-icon.green {
+    background: rgba(74, 222, 128, 0.12);
+    color: var(--dk-green);
+}
+
+.dk-stat-icon.amber {
+    background: rgba(251, 191, 36, 0.12);
+    color: var(--dk-amber);
+}
+
+.dk-stat-info {
+    position: relative;
+    z-index: 1;
+}
+
+.dk-stat-info h3 {
+    font-size: 1.75rem;
+    font-weight: 800;
+    line-height: 1;
+    color: var(--dk-text);
+    letter-spacing: -0.04em;
+}
+
+.dk-stat-info p {
+    font-size: 0.78rem;
+    color: var(--dk-text-muted);
+    margin-top: 4px;
+}
+
+/* ─── Assessment Card ───────────────────────────────────────────────────── */
+.dk-assessment-card {
+    background: var(--dk-surface);
+    border: 1px solid var(--dk-border);
+    border-radius: 18px;
+    padding: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+    backdrop-filter: blur(20px);
+    text-decoration: none;
+    color: inherit;
+    position: relative;
+    overflow: hidden;
+}
+
+.dk-assessment-card::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: radial-gradient(400px circle at var(--mx, 50%) var(--my, 50%), rgba(99, 102, 241, 0.07) 0%, transparent 70%);
+    opacity: 0;
+    transition: opacity 0.3s ease;
+    pointer-events: none;
+}
+
+.dk-assessment-card:hover {
+    border-color: rgba(99, 102, 241, 0.35);
+    transform: translateY(-3px);
+    box-shadow: 0 12px 48px rgba(99, 102, 241, 0.15);
+    color: inherit;
+}
+
+.dk-assessment-card:hover::before {
+    opacity: 1;
+}
+
+/* ─── Section title ─────────────────────────────────────────────────────── */
+.dk-section-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.dk-section-title h2 {
+    font-size: 1.1rem;
+    font-weight: 700;
+    color: var(--dk-text);
+    letter-spacing: -0.02em;
+    white-space: nowrap;
+}
+
+.dk-section-title .line {
+    flex: 1;
+    height: 1px;
+    background: linear-gradient(to right, var(--dk-border), transparent);
+}
+
+/* ─── Badge overrides ───────────────────────────────────────────────────── */
+.dark-app .badge-primary {
+    background: rgba(99, 102, 241, 0.15);
+    color: var(--dk-primary-light);
+    border-color: rgba(99, 102, 241, 0.25);
+}
+
+.dark-app .badge-success {
+    background: rgba(74, 222, 128, 0.12);
+    color: var(--dk-green);
+    border-color: rgba(74, 222, 128, 0.2);
+}
+
+.dark-app .badge-warning {
+    background: rgba(251, 191, 36, 0.12);
+    color: var(--dk-amber);
+    border-color: rgba(251, 191, 36, 0.2);
+}
+
+.dark-app .badge-danger {
+    background: rgba(248, 113, 113, 0.12);
+    color: var(--dk-red);
+    border-color: rgba(248, 113, 113, 0.2);
+}
+
+.dark-app .badge-cyan {
+    background: rgba(34, 211, 238, 0.10);
+    color: var(--dk-cyan);
+    border-color: rgba(34, 211, 238, 0.2);
+}
+
+/* ─── Form inputs in dark ───────────────────────────────────────────────── */
+.dk-input {
+    background: rgba(255, 255, 255, 0.05);
+    border: 1px solid var(--dk-border);
+    border-radius: 12px;
+    color: var(--dk-text);
+    font-family: var(--dk-font);
+    font-size: 0.9rem;
+    padding: 12px 16px;
+    transition: all 0.2s ease;
+    outline: none;
+    width: 100%;
+}
+
+.dk-input:focus {
+    border-color: var(--dk-primary);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15);
+    background: rgba(255, 255, 255, 0.07);
+}
+
+.dk-input::placeholder {
+    color: var(--dk-text-muted);
+}
+
+.dk-label {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--dk-text-sub);
+    letter-spacing: 0.02em;
+}
+
+.dk-form-group {
+    display: flex;
+    flex-direction: column;
+    gap: 7px;
+}
+
+/* ─── Buttons in dark context ───────────────────────────────────────────── */
+.dk-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 11px 22px;
+    border-radius: 12px;
+    font-family: var(--dk-font);
+    font-size: 0.88rem;
+    font-weight: 600;
+    cursor: pointer;
+    border: none;
+    text-decoration: none;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+    white-space: nowrap;
+    letter-spacing: -0.01em;
+    position: relative;
+    overflow: hidden;
+}
+
+/* ─── Magnetic hover glow effect on action buttons ─────────────────────── */
+.dk-btn-magnetic {
+    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1), transform 0.2s ease;
+}
+
+.dk-btn-magnetic::after {
+    content: '';
+    position: absolute;
+    inset: -2px;
+    border-radius: inherit;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.5), rgba(168, 85, 247, 0.5));
+    opacity: 0;
+    z-index: -1;
+    transition: opacity 0.3s ease;
+    filter: blur(12px);
+}
+
+.dk-btn-magnetic:hover::after {
+    opacity: 1;
+}
+
+.dk-btn-magnetic:hover {
+    transform: translateY(-2px) scale(1.02);
+    box-shadow: 0 12px 40px rgba(99, 102, 241, 0.4), 0 0 0 1px rgba(99, 102, 241, 0.3);
+}
+
+.dk-btn-primary {
+    background: linear-gradient(135deg, var(--dk-primary), var(--dk-accent));
+    color: #fff;
+    box-shadow: 0 4px 24px rgba(99, 102, 241, 0.35);
+}
+
+.dk-btn-primary:hover:not(:disabled) {
+    box-shadow: 0 8px 40px rgba(99, 102, 241, 0.5);
+    transform: translateY(-1px);
+    color: #fff;
+}
+
+.dk-btn-ghost {
+    background: var(--dk-surface-2);
+    color: var(--dk-text-sub);
+    border: 1px solid var(--dk-border);
+}
+
+.dk-btn-ghost:hover:not(:disabled) {
+    background: var(--dk-surface);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: var(--dk-text);
+}
+
+.dk-btn-danger {
+    background: rgba(248, 113, 113, 0.15);
+    color: var(--dk-red);
+    border: 1px solid rgba(248, 113, 113, 0.25);
+}
+
+.dk-btn-danger:hover:not(:disabled) {
+    background: rgba(248, 113, 113, 0.25);
+}
+
+.dk-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.dk-btn-sm {
+    padding: 7px 14px;
+    font-size: 0.8rem;
+    border-radius: 9px;
+}
+
+.dk-btn-lg {
+    padding: 14px 28px;
+    font-size: 1rem;
+    border-radius: 14px;
+}
+
+.dk-btn-full {
+    width: 100%;
+}
+
+/* ─── Alert / Toast ─────────────────────────────────────────────────────── */
+.dk-alert {
+    padding: 12px 16px;
+    border-radius: 12px;
+    font-size: 0.85rem;
+    display: flex;
+    align-items: flex-start;
+    gap: 10px;
+    line-height: 1.5;
+}
+
+.dk-alert-error {
+    background: rgba(248, 113, 113, 0.10);
+    border: 1px solid rgba(248, 113, 113, 0.25);
+    color: var(--dk-red);
+}
+
+.dk-alert-success {
+    background: rgba(74, 222, 128, 0.10);
+    border: 1px solid rgba(74, 222, 128, 0.25);
+    color: var(--dk-green);
+}
+
+.dk-alert-info {
+    background: rgba(99, 102, 241, 0.10);
+    border: 1px solid rgba(99, 102, 241, 0.25);
+    color: var(--dk-primary-light);
+}
+
+/* ─── Toast notification ────────────────────────────────────────────────── */
+.dk-toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    z-index: 10000;
+    padding: 14px 24px;
+    border-radius: 14px;
+    font-size: 0.88rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    backdrop-filter: blur(20px);
+    animation: dk-toast-in 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+    pointer-events: auto;
+}
+
+.dk-toast-error {
+    background: rgba(248, 113, 113, 0.15);
+    border: 1px solid rgba(248, 113, 113, 0.3);
+    color: var(--dk-red);
+    box-shadow: 0 8px 32px rgba(248, 113, 113, 0.2);
+}
+
+.dk-toast-success {
+    background: rgba(74, 222, 128, 0.15);
+    border: 1px solid rgba(74, 222, 128, 0.3);
+    color: var(--dk-green);
+    box-shadow: 0 8px 32px rgba(74, 222, 128, 0.2);
+}
+
+@keyframes dk-toast-in {
+    from {
+        opacity: 0;
+        transform: translateY(16px) scale(0.96);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+/* ─── Upload zone ───────────────────────────────────────────────────────── */
+.dk-upload-zone {
+    border: 2px dashed var(--dk-border);
+    border-radius: 16px;
+    padding: 48px 32px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.25s ease;
+    background: transparent;
+}
+
+.dk-upload-zone:hover,
+.dk-upload-zone.dragging {
+    border-color: var(--dk-primary);
+    background: rgba(99, 102, 241, 0.04);
+}
+
+/* ─── Progress bar ──────────────────────────────────────────────────────── */
+.dk-progress-track {
+    background: rgba(255, 255, 255, 0.06);
+    border-radius: 999px;
+    height: 6px;
+    overflow: hidden;
+}
+
+.dk-progress-fill {
+    height: 100%;
+    border-radius: 999px;
+    background: linear-gradient(to right, var(--dk-primary), var(--dk-accent));
+    transition: width 1s ease;
+}
+
+/* ─── Score circle ──────────────────────────────────────────────────────── */
+.dk-score-circle {
+    width: 94px;
+    height: 94px;
+    border-radius: 50%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    border: 3px solid;
+    margin: 0 auto;
+}
+
+.dk-score-circle.excellent {
+    border-color: var(--dk-green);
+    color: var(--dk-green);
+}
+
+.dk-score-circle.good {
+    border-color: var(--dk-amber);
+    color: var(--dk-amber);
+}
+
+.dk-score-circle.poor {
+    border-color: var(--dk-red);
+    color: var(--dk-red);
+}
+
+/* ─── Scrollbar ─────────────────────────────────────────────────────────── */
+.dark-app ::-webkit-scrollbar {
+    width: 5px;
+}
+
+.dark-app ::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.dark-app ::-webkit-scrollbar-thumb {
+    background: rgba(99, 102, 241, 0.25);
+    border-radius: 3px;
+}
+
+/* ─── Spinner ───────────────────────────────────────────────────────────── */
+.dk-spinner {
+    width: 36px;
+    height: 36px;
+    border: 3px solid rgba(255, 255, 255, 0.08);
+    border-top-color: var(--dk-primary);
+    border-radius: 50%;
+    animation: dk-spin 0.8s linear infinite;
+}
+
+@keyframes dk-spin {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+/* ─── Classroom code chip ────────────────────────────────────────────────── */
+.dk-code-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 18px;
+    border-radius: 12px;
+    background: rgba(99, 102, 241, 0.12);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    font-family: 'Geist Mono', monospace;
+    font-size: 1.1rem;
+    font-weight: 700;
+    letter-spacing: 0.18em;
+    color: var(--dk-primary-light);
+    cursor: pointer;
+    transition: all 0.2s ease;
+    user-select: all;
+}
+
+.dk-code-chip:hover {
+    background: rgba(99, 102, 241, 0.2);
+    border-color: rgba(99, 102, 241, 0.5);
+}
+
+/* ─── Spring stagger animation ─────────────────────────────────────────── */
+@keyframes dk-spring-up {
+    0% {
+        opacity: 0;
+        transform: translateY(28px) scale(0.97);
+    }
+
+    60% {
+        opacity: 1;
+        transform: translateY(-4px) scale(1.01);
+    }
+
+    80% {
+        transform: translateY(2px) scale(0.998);
+    }
+
+    100% {
+        opacity: 1;
+        transform: translateY(0) scale(1);
+    }
+}
+
+@keyframes dk-fade-up {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.dk-stagger>* {
+    animation: dk-spring-up 0.6s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.dk-stagger>*:nth-child(1) {
+    animation-delay: 0.00s;
+}
+
+.dk-stagger>*:nth-child(2) {
+    animation-delay: 0.06s;
+}
+
+.dk-stagger>*:nth-child(3) {
+    animation-delay: 0.12s;
+}
+
+.dk-stagger>*:nth-child(4) {
+    animation-delay: 0.18s;
+}
+
+.dk-stagger>*:nth-child(5) {
+    animation-delay: 0.24s;
+}
+
+.dk-stagger>*:nth-child(6) {
+    animation-delay: 0.30s;
+}
+
+.dk-stagger>*:nth-child(7) {
+    animation-delay: 0.36s;
+}
+
+.dk-stagger>*:nth-child(8) {
+    animation-delay: 0.42s;
+}
+
+.dk-stagger>*:nth-child(9) {
+    animation-delay: 0.48s;
+}
+
+.dk-stagger>*:nth-child(10) {
+    animation-delay: 0.54s;
+}
+
+/* ─── Evaluate loading skeleton ────────────────────────────────────────── */
+.dk-eval-skeleton {
+    position: fixed;
+    inset: 0;
+    z-index: 9999;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 28px;
+    background: rgba(5, 5, 10, 0.92);
+    backdrop-filter: blur(24px);
+}
+
+.dk-eval-orb {
+    width: 100px;
+    height: 100px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(168, 85, 247, 0.2));
+    border: 2px solid rgba(99, 102, 241, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.4rem;
+    position: relative;
+    animation: dk-eval-breathe 2.5s ease-in-out infinite;
+}
+
+.dk-eval-orb::before {
+    content: '';
+    position: absolute;
+    inset: -8px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    border-top-color: var(--dk-primary);
+    border-right-color: var(--dk-accent);
+    animation: dk-spin 2s linear infinite;
+}
+
+.dk-eval-orb::after {
+    content: '';
+    position: absolute;
+    inset: -16px;
+    border-radius: 50%;
+    border: 1px solid transparent;
+    border-bottom-color: rgba(99, 102, 241, 0.3);
+    animation: dk-spin 3s linear infinite reverse;
+}
+
+@keyframes dk-eval-breathe {
+
+    0%,
+    100% {
+        box-shadow: 0 0 30px rgba(99, 102, 241, 0.2), 0 0 60px rgba(168, 85, 247, 0.1);
+        transform: scale(1);
+    }
+
+    50% {
+        box-shadow: 0 0 50px rgba(99, 102, 241, 0.4), 0 0 100px rgba(168, 85, 247, 0.2);
+        transform: scale(1.05);
+    }
+}
+
+.dk-eval-steps {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    min-width: 280px;
+}
+
+.dk-eval-step {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    border-radius: 10px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    transition: all 0.4s ease;
+}
+
+.dk-eval-step.active {
+    background: rgba(99, 102, 241, 0.1);
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    color: var(--dk-primary-light);
+}
+
+.dk-eval-step.done {
+    color: var(--dk-green);
+}
+
+.dk-eval-step.pending {
+    color: var(--dk-text-muted);
+    opacity: 0.5;
+}
+
+/* ─── Demo mode keyframes (shared) ──────────────────────────────────────── */
+@keyframes auth-scan {
+    0% {
+        top: 0;
+        opacity: 0;
+    }
+
+    10% {
+        opacity: 1;
+    }
+
+    90% {
+        opacity: 1;
+    }
+
+    100% {
+        top: 100%;
+        opacity: 0;
+    }
+}
+
+@keyframes demo-brain-pulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
+    }
+
+    50% {
+        box-shadow: 0 0 40px rgba(99, 102, 241, 0.4), 0 0 60px rgba(168, 85, 247, 0.2);
+    }
+}
+
+@keyframes demo-badge-pulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(168, 85, 247, 0);
+    }
+
+    50% {
+        box-shadow: 0 0 12px rgba(168, 85, 247, 0.2);
+    }
+}
+
+/* ─── DarkSidebar active indicator glow ────────────────────────────────── */
+.dk-logo-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    padding: 0 12px 16px;
+    margin-bottom: 12px;
+    border-bottom: 1px solid var(--dk-border);
+}
+
+.dk-logo-link:hover {
+    color: inherit;
+}
+
+/* ─── Proctor dark glassmorphic container ───────────────────────────────── */
+.dk-proctor-container {
+    border-radius: 16px;
+    overflow: hidden;
+    background: rgba(5, 5, 15, 0.6);
+    border: 1px solid var(--dk-border);
+    backdrop-filter: blur(20px);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.dk-proctor-status {
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    backdrop-filter: blur(8px);
+}
+
+.dk-proctor-status.active {
+    background: rgba(16, 185, 129, 0.2);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    color: var(--dk-green);
+}
+
+.dk-proctor-status.initializing {
+    background: rgba(99, 102, 241, 0.2);
+    border: 1px solid rgba(99, 102, 241, 0.3);
+    color: var(--dk-primary-light);
+}
+
+.dk-proctor-status.error {
+    background: rgba(248, 113, 113, 0.2);
+    border: 1px solid rgba(248, 113, 113, 0.3);
+    color: var(--dk-red);
+}
+
+/* ─── Responsive ────────────────────────────────────────────────────────── */
+@media (max-width: 768px) {
+    .dk-card {
+        border-radius: 14px;
+        padding: 16px;
+    }
+
+    .dk-stat-card {
+        padding: 14px 16px;
+    }
+
+    .dk-eval-skeleton {
+        padding: 24px;
+    }
+
+    .dk-toast {
+        left: 16px;
+        right: 16px;
+        bottom: 16px;
+    }
+}
+
+/* ─── Coding Workspace: Editor wrap with focus glow ───────────────────── */
+.dark-app .dk-editor-wrap {
+    position: relative;
+    border: 1px solid var(--dk-border);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+.dark-app .dk-editor-wrap:focus-within {
+    border-color: var(--dk-primary);
+    box-shadow: 0 0 24px rgba(99, 102, 241, 0.15), 0 0 4px rgba(99, 102, 241, 0.3);
+}
+
+/* ─── Coding Workspace: AI Evaluate animated gradient button ──────────── */
+.dark-app .dk-ai-evaluate-btn {
+    position: relative;
+    overflow: hidden;
+    transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.dark-app .dk-ai-evaluate-btn::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: -100%;
+    width: 200%;
+    height: 100%;
+    background: linear-gradient(90deg, transparent 0%, rgba(255, 255, 255, 0.12) 50%, transparent 100%);
+    animation: dk-shimmer 3s ease-in-out infinite;
+}
+
+.dark-app .dk-ai-evaluate-btn:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 30px rgba(99, 102, 241, 0.4), 0 0 16px rgba(168, 85, 247, 0.25);
+}
+
+.dark-app .dk-ai-evaluate-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+}
+
+@keyframes dk-shimmer {
+    0% {
+        left: -100%;
+    }
+
+    100% {
+        left: 100%;
+    }
+}
+
+/* ─── Coding Workspace: Brain pulse for eval overlay ─────────────────── */
+@keyframes demo-brain-pulse {
+
+    0%,
+    100% {
+        box-shadow: 0 0 20px rgba(99, 102, 241, 0.2);
+    }
+
+    50% {
+        box-shadow: 0 0 40px rgba(99, 102, 241, 0.4), 0 0 60px rgba(168, 85, 247, 0.2);
+    }
+}

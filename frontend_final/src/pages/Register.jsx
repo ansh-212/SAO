@@ -1,14 +1,47 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { useLang } from '../context/LangContext'
+import WebGLCanvas from '../components/landing/WebGLCanvas'
+import { useMousePosition } from '../hooks/useMousePosition'
+import '../styles/auth-premium.css'
+
+/* ─── Typewriter text effect ────────────────────────────────────────────── */
+function TypewriterText({ text, delay = 0, speed = 40 }) {
+  const [displayed, setDisplayed] = useState('')
+  const [started, setStarted] = useState(false)
+
+  useEffect(() => {
+    const t = setTimeout(() => setStarted(true), delay)
+    return () => clearTimeout(t)
+  }, [delay])
+
+  useEffect(() => {
+    if (!started || displayed.length >= text.length) return
+    const t = setTimeout(() => setDisplayed(text.slice(0, displayed.length + 1)), speed)
+    return () => clearTimeout(t)
+  }, [displayed, started, text, speed])
+
+  return (
+    <span>
+      {displayed}
+      {displayed.length < text.length && <span className="auth-typewriter-cursor" />}
+    </span>
+  )
+}
 
 export default function Register() {
   const [form, setForm] = useState({ name: '', email: '', password: '', role: 'student' })
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [showSuccess, setShowSuccess] = useState(false)
   const { register } = useAuth()
   const navigate = useNavigate()
+  const mouse = useMousePosition()
+  const mouseRef = useRef({ nX: 0, nY: 0 })
+
+  useEffect(() => {
+    mouseRef.current = { nX: mouse.nX, nY: mouse.nY }
+  }, [mouse.nX, mouse.nY])
 
   const handleChange = (e) => setForm(f => ({ ...f, [e.target.name]: e.target.value }))
 
@@ -18,8 +51,11 @@ export default function Register() {
     if (form.password.length < 6) return setError('Password must be at least 6 characters.')
     setLoading(true)
     try {
-      await register(form.email, form.name, form.password, form.role)
-      navigate('/dashboard')
+      const user = await register(form.email, form.name, form.password, form.role)
+      setShowSuccess(true)
+      setTimeout(() => {
+        navigate(user.role === 'admin' ? '/admin/dashboard' : '/student/dashboard')
+      }, 600)
     } catch (err) {
       setError(err?.response?.data?.detail || 'Registration failed. Email may already be in use.')
     } finally {
@@ -27,67 +63,145 @@ export default function Register() {
     }
   }
 
+  const roles = [
+    { val: 'student', icon: '🎓', label: 'Student / Candidate' },
+    { val: 'admin', icon: '👑', label: 'Teacher / HR Admin' },
+  ]
+
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', background: 'var(--grad-bg)' }}>
-      <div style={{ width: '100%', maxWidth: '480px' }}>
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+    <div className="auth-vault">
+      {/* WebGL particle canvas */}
+      <WebGLCanvas mouseRef={mouseRef} particleCount={600} />
+
+      {/* Ambient orbs */}
+      <div className="auth-orbs">
+        <div className="auth-orb" />
+        <div className="auth-orb" />
+        <div className="auth-orb" />
+        <div className="auth-orb" />
+      </div>
+
+      {/* Cyber grid */}
+      <div className="auth-grid" />
+
+      <div className="auth-wrapper" style={{ maxWidth: 480 }}>
+        {/* Logo */}
+        <div className="auth-logo">
           <Link to="/" style={{ textDecoration: 'none' }}>
-            <div style={{ fontSize: '2rem', marginBottom: '8px' }}>⚡</div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: 800, background: 'var(--grad-primary)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              KaushalyaAI
+            <div className="auth-logo-icon">⚡</div>
+            <div className="auth-logo-text">
+              Interview<span>Vault</span>
             </div>
           </Link>
-          <p style={{ color: 'var(--text-secondary)', marginTop: '8px', fontSize: '0.9rem' }}>Create your free account</p>
+          <div className="auth-subtitle">
+            <TypewriterText text="Create your free account" delay={600} speed={35} />
+          </div>
         </div>
 
-        <div className="card card-body" style={{ padding: '32px' }}>
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-            {error && <div className="alert alert-error">{error}</div>}
+        {/* Card */}
+        <div className="auth-card">
+          <form onSubmit={handleSubmit} className="auth-form">
+            {error && (
+              <div className="auth-error">
+                <span>⚠️</span> {error}
+              </div>
+            )}
 
-            <div className="form-group">
-              <label className="form-label">Full Name</label>
-              <input className="form-input" name="name" placeholder="Alex Johnson" value={form.name} onChange={handleChange} required />
+            <div className="auth-field">
+              <label className="auth-label">Full Name</label>
+              <div className="auth-input-wrap">
+                <input
+                  className="auth-input"
+                  name="name"
+                  placeholder="Alex Johnson"
+                  value={form.name}
+                  onChange={handleChange}
+                  required
+                  autoComplete="name"
+                />
+              </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Email Address</label>
-              <input type="email" className="form-input" name="email" placeholder="you@example.com" value={form.email} onChange={handleChange} required />
+            <div className="auth-field">
+              <label className="auth-label">Email Address</label>
+              <div className="auth-input-wrap">
+                <input
+                  type="email"
+                  className="auth-input"
+                  name="email"
+                  placeholder="you@example.com"
+                  value={form.email}
+                  onChange={handleChange}
+                  required
+                  autoComplete="email"
+                />
+              </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Password</label>
-              <input type="password" className="form-input" name="password" placeholder="Min. 6 characters" value={form.password} onChange={handleChange} required />
+            <div className="auth-field">
+              <label className="auth-label">Password</label>
+              <div className="auth-input-wrap">
+                <input
+                  type="password"
+                  className="auth-input"
+                  name="password"
+                  placeholder="Min. 6 characters"
+                  value={form.password}
+                  onChange={handleChange}
+                  required
+                  autoComplete="new-password"
+                />
+              </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">I am a...</label>
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
-                {[
-                  { val: 'student', icon: '🎓', label: 'Student / Candidate' },
-                  { val: 'admin', icon: '👑', label: 'Teacher / HR Admin' },
-                ].map(opt => (
-                  <label key={opt.val} style={{
-                    cursor: 'pointer', padding: '14px', borderRadius: 'var(--radius-md)', border: `2px solid ${form.role === opt.val ? 'var(--primary)' : 'var(--border)'}`,
-                    background: form.role === opt.val ? 'rgba(99,102,241,0.1)' : 'transparent',
-                    textAlign: 'center', transition: 'var(--transition)'
-                  }}>
-                    <input type="radio" name="role" value={opt.val} checked={form.role === opt.val} onChange={handleChange} style={{ display: 'none' }} />
-                    <div style={{ fontSize: '1.5rem', marginBottom: '4px' }}>{opt.icon}</div>
-                    <div style={{ fontSize: '0.8rem', fontWeight: 600 }}>{opt.label}</div>
+            <div className="auth-field">
+              <label className="auth-label">I am a...</label>
+              <div className="auth-role-grid">
+                {roles.map(opt => (
+                  <label
+                    key={opt.val}
+                    className={`auth-role-option ${form.role === opt.val ? 'selected' : ''}`}
+                  >
+                    <input
+                      type="radio"
+                      name="role"
+                      value={opt.val}
+                      checked={form.role === opt.val}
+                      onChange={handleChange}
+                      style={{ display: 'none' }}
+                    />
+                    <span className="role-icon">{opt.icon}</span>
+                    <span className="role-label">{opt.label}</span>
                   </label>
                 ))}
               </div>
             </div>
 
-            <button type="submit" className="btn btn-primary" disabled={loading} style={{ justifyContent: 'center', marginTop: '4px' }}>
-              {loading ? '⏳ Creating account...' : '🚀 Create Free Account'}
+            <button type="submit" className="auth-submit" disabled={loading || showSuccess}>
+              {showSuccess ? (
+                <>✅ Account Created!</>
+              ) : loading ? (
+                <>
+                  <span style={{
+                    width: 18, height: 18,
+                    border: '2px solid rgba(255,255,255,0.3)',
+                    borderTopColor: '#fff',
+                    borderRadius: '50%',
+                    animation: 'dk-spin 0.6s linear infinite',
+                    display: 'inline-block',
+                  }} />
+                  Creating account...
+                </>
+              ) : (
+                <>🚀 Create Free Account</>
+              )}
             </button>
           </form>
 
-          <p style={{ textAlign: 'center', marginTop: '20px', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
-            Have an account?{' '}
-            <Link to="/login" style={{ color: 'var(--primary-light)', fontWeight: 600 }}>Sign in</Link>
-          </p>
+          <div className="auth-footer">
+            Already have an account?{' '}
+            <Link to="/login">Sign in →</Link>
+          </div>
         </div>
       </div>
     </div>

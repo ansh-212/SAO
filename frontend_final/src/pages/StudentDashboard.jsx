@@ -1,64 +1,157 @@
 import React, { useState, useEffect, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { motion, AnimatePresence } from 'framer-motion'
 import {
-  Chart as ChartJS,
-  RadialLinearScale,
-  PointElement,
-  LineElement,
-  Filler,
-  Tooltip,
-  Legend,
-  CategoryScale,
-  LinearScale,
-  BarElement
+  Chart as ChartJS, RadialLinearScale, PointElement, LineElement,
+  Filler, Tooltip, Legend, CategoryScale, LinearScale, BarElement,
 } from 'chart.js'
 import { Radar, Bar } from 'react-chartjs-2'
-import Sidebar from '../components/Sidebar'
+import DarkLayout from '../components/layout/DarkLayout'
+import JoinClassModal from '../components/dashboard/JoinClassModal'
+import ClassroomCard from '../components/dashboard/ClassroomCard'
 import api from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useLang } from '../context/LangContext'
+import {
+  DEMO_STUDENT_ANALYTICS, DEMO_ASSESSMENTS, DEMO_CLASSROOMS,
+  DEMO_GAMIFICATION, DEMO_LEADERBOARD, DEMO_DAILY_PLAN,
+} from '../data/demoData'
 
 ChartJS.register(RadialLinearScale, PointElement, LineElement, Filler, Tooltip, Legend, CategoryScale, LinearScale, BarElement)
 
+/* ─── Glassmorphic Stat Card ─────────────────────────────────────────────── */
 function StatCard({ icon, iconClass, value, label, sub }) {
   return (
-    <div className="stat-card">
-      <div className={`stat-icon ${iconClass}`}>{icon}</div>
-      <div className="stat-info">
+    <div className="dk-stat-card">
+      <div className={`dk-stat-icon ${iconClass}`}>{icon}</div>
+      <div className="dk-stat-info">
         <h3>{value}</h3>
         <p>{label}</p>
-        {sub && <p style={{ fontSize: '0.75rem', color: 'var(--success)', marginTop: '2px' }}>{sub}</p>}
+        {sub && <p style={{ fontSize: '0.72rem', color: 'var(--dk-green)', marginTop: 2 }}>{sub}</p>}
       </div>
     </div>
   )
 }
 
+/* ─── Dark chart config ──────────────────────────────────────────────────── */
+const radarOptions = {
+  scales: {
+    r: {
+      min: 0, max: 100,
+      grid: { color: 'rgba(99,102,241,0.15)' },
+      ticks: { color: '#64748b', font: { size: 11 }, stepSize: 25, backdropColor: 'transparent' },
+      pointLabels: { color: '#94a3b8', font: { size: 12 } },
+    },
+  },
+  plugins: { legend: { display: false } },
+  maintainAspectRatio: true,
+}
+
+const barOptions = {
+  scales: {
+    y: { min: 0, max: 100, grid: { color: 'rgba(99,102,241,0.08)' }, ticks: { color: '#64748b' } },
+    x: { grid: { display: false }, ticks: { color: '#64748b' } },
+  },
+  plugins: { legend: { display: false } },
+  maintainAspectRatio: false,
+}
+
+/* ─── Difficulty badge helper ────────────────────────────────────────────── */
+const diffBadge = (d) => ({ beginner: 'badge-success', intermediate: 'badge-warning', advanced: 'badge-danger' }[d] || 'badge-primary')
+
+/* ─── Assessment card with hover spotlight ───────────────────────────────── */
+function AssessmentCard({ assessment, navigate }) {
+  const ref = useRef(null)
+  const onMove = e => {
+    const r = ref.current?.getBoundingClientRect()
+    if (!r) return
+    ref.current.style.setProperty('--mx', `${((e.clientX - r.left) / r.width) * 100}%`)
+    ref.current.style.setProperty('--my', `${((e.clientY - r.top) / r.height) * 100}%`)
+  }
+  return (
+    <div
+      ref={ref}
+      className="dk-assessment-card"
+      onClick={() => navigate(`/assessment/${assessment.id}`)}
+      onMouseMove={onMove}
+      role="button" tabIndex={0}
+      onKeyDown={e => e.key === 'Enter' && navigate(`/assessment/${assessment.id}`)}
+    >
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+        <div style={{ fontSize: '2rem' }}>{assessment.thumbnail_emoji}</div>
+        {assessment.user_submitted && <span className="badge badge-success">✓ Done</span>}
+      </div>
+      <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--dk-text)', letterSpacing: '-0.02em' }}>
+        {assessment.title}
+      </div>
+      <div style={{ fontSize: '0.83rem', color: 'var(--dk-text-muted)', display: '-webkit-box', WebkitLineClamp: 2, WebkitBoxOrient: 'vertical', overflow: 'hidden', lineHeight: 1.6 }}>
+        {assessment.description}
+      </div>
+      <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 'auto' }}>
+        <span className={`badge ${diffBadge(assessment.difficulty)}`}>{assessment.difficulty}</span>
+        <span className="badge badge-primary">⏱ {assessment.time_limit_minutes}m</span>
+        <span className="badge badge-cyan">❓ {assessment.num_questions}Q</span>
+      </div>
+      <button className="dk-btn dk-btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
+        {assessment.user_submitted ? '🔄 Retake' : '▶ Start Assessment'}
+      </button>
+    </div>
+  )
+}
+
+/* ─── Main Component ─────────────────────────────────────────────────────── */
 export default function StudentDashboard() {
   const [analytics, setAnalytics] = useState(null)
   const [assessments, setAssessments] = useState([])
+  const [classrooms, setClassrooms] = useState([])
   const [loading, setLoading] = useState(true)
-  const { user } = useAuth()
+  const [showJoin, setShowJoin] = useState(false)
+  const [gamification, setGamification] = useState(null)
+  const [leaderboard, setLeaderboard] = useState(null)
+  const [dailyPlan, setDailyPlan] = useState(null)
+  const { user, isDemoMode } = useAuth()
   const { t } = useLang()
   const navigate = useNavigate()
 
   useEffect(() => {
+    if (isDemoMode) {
+      setAnalytics(DEMO_STUDENT_ANALYTICS)
+      setAssessments(DEMO_ASSESSMENTS)
+      setClassrooms(DEMO_CLASSROOMS.slice(0, 1))
+      setGamification(DEMO_GAMIFICATION)
+      setLeaderboard(DEMO_LEADERBOARD)
+      setDailyPlan(DEMO_DAILY_PLAN)
+      setLoading(false)
+      return
+    }
     Promise.all([
       api.get('/analytics/me'),
-      api.get('/assessments')
-    ]).then(([analyticsRes, assessmentsRes]) => {
+      api.get('/classrooms/my-assessments').catch(() => ({ data: [] })),
+      api.get('/classrooms/my-classrooms').catch(() => ({ data: [] })),
+      api.get('/gamification/me').catch(() => ({ data: null })),
+      api.get('/gamification/leaderboard').catch(() => ({ data: null })),
+      api.get('/planner/today').catch(() => ({ data: null })),
+    ]).then(([analyticsRes, assessRes, classRes, gamRes, lbRes, planRes]) => {
       setAnalytics(analyticsRes.data)
-      setAssessments(assessmentsRes.data)
+      setAssessments(assessRes.data)
+      setClassrooms(classRes.data)
+      setGamification(gamRes.data)
+      setLeaderboard(lbRes.data)
+      setDailyPlan(planRes.data)
     }).finally(() => setLoading(false))
-  }, [])
+  }, [isDemoMode])
+
+  const handleJoined = (classroom) => {
+    setClassrooms(prev => [...prev, classroom])
+  }
 
   if (loading) return (
-    <div className="page-layout">
-      <Sidebar />
-      <div className="main-content loading-page">
-        <div className="spinner" />
-        <p>Loading your dashboard...</p>
+    <DarkLayout>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', minHeight: '60vh', flexDirection: 'column', gap: 16 }}>
+        <div className="dk-spinner" />
+        <p style={{ color: 'var(--dk-text-muted)' }}>Loading your dashboard...</p>
       </div>
-    </div>
+    </DarkLayout>
   )
 
   const radarData = {
@@ -66,26 +159,11 @@ export default function StudentDashboard() {
     datasets: [{
       label: 'Your Skills',
       data: analytics?.skill_radar?.scores || [0, 0, 0, 0],
-      backgroundColor: 'rgba(99, 102, 241, 0.2)',
+      backgroundColor: 'rgba(99,102,241,0.18)',
       borderColor: '#6366f1',
       pointBackgroundColor: '#6366f1',
-      pointBorderColor: '#fff',
-      pointHoverBackgroundColor: '#fff',
-      pointHoverBorderColor: '#6366f1',
-    }]
-  }
-
-  const radarOptions = {
-    scales: {
-      r: {
-        min: 0, max: 100,
-        grid: { color: 'rgba(99,102,241,0.2)' },
-        ticks: { color: '#64748b', font: { size: 11 }, stepSize: 25 },
-        pointLabels: { color: '#94a3b8', font: { size: 12 } }
-      }
-    },
-    plugins: { legend: { display: false } },
-    maintainAspectRatio: true,
+      pointBorderColor: 'rgba(99,102,241,0.5)',
+    }],
   }
 
   const barData = {
@@ -93,142 +171,463 @@ export default function StudentDashboard() {
     datasets: [{
       label: 'Score %',
       data: (analytics?.score_history || []).map(s => s.score),
-      backgroundColor: 'rgba(99, 102, 241, 0.7)',
+      backgroundColor: 'rgba(99,102,241,0.7)',
       borderRadius: 6,
-    }]
-  }
-
-  const barOptions = {
-    scales: {
-      y: { min: 0, max: 100, grid: { color: 'rgba(99,102,241,0.1)' }, ticks: { color: '#64748b' } },
-      x: { grid: { display: false }, ticks: { color: '#64748b' } }
-    },
-    plugins: { legend: { display: false } },
-    maintainAspectRatio: false,
-  }
-
-  const getDifficultyBadge = (d) => {
-    const map = { beginner: 'badge-success', intermediate: 'badge-warning', advanced: 'badge-danger' }
-    return map[d] || 'badge-primary'
+    }],
   }
 
   return (
-    <div className="page-layout">
-      <Sidebar />
-      <div className="main-content fade-in">
-        <div className="page-header">
-          <h1>👋 {t('welcome')}, {user?.name?.split(' ')[0]}!</h1>
-          <p>Here's your skill progress and available assessments.</p>
-        </div>
+    <DarkLayout>
+      <AnimatePresence>
+        {showJoin && (
+          <JoinClassModal
+            onClose={() => setShowJoin(false)}
+            onJoined={handleJoined}
+          />
+        )}
+      </AnimatePresence>
 
-        {/* Stats */}
-        <div className="grid-4" style={{ marginBottom: '32px' }}>
-          <StatCard icon="📝" iconClass="indigo" value={analytics?.total_submissions || 0} label="Assessments Taken" />
-          <StatCard icon="⭐" iconClass="amber" value={`${analytics?.average_score || 0}%`} label="Average Score" />
-          <StatCard icon="🏆" iconClass="green" value={`${analytics?.best_score || 0}%`} label="Best Score" />
-          <StatCard icon="⚡" iconClass="violet" value={analytics?.xp_points || 0} label="XP Points" sub={`🔥 ${analytics?.streak_days || 0} day streak`} />
-        </div>
+      {/* Page header */}
+      <motion.div
+        style={{ marginBottom: 28 }}
+        initial={{ opacity: 0, y: 16 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+      >
+        <h1 style={{ fontSize: 'clamp(1.4rem, 3vw, 1.9rem)', fontWeight: 800, color: 'var(--dk-text)', letterSpacing: '-0.04em', marginBottom: 6 }}>
+          👋 Welcome, {user?.name?.split(' ')[0]}!
+        </h1>
+        <p style={{ color: 'var(--dk-text-muted)', fontSize: '0.88rem' }}>
+          Here's your skill progress and available assessments.
+        </p>
+      </motion.div>
 
-        {/* Charts Row */}
-        <div className="grid-2" style={{ marginBottom: '32px' }}>
-          <div className="card card-body">
-            <h3 style={{ marginBottom: '20px', fontSize: '1rem' }}>🎯 Skill Radar</h3>
-            {analytics?.total_submissions > 0 ? (
-              <div style={{ maxWidth: '300px', margin: '0 auto' }}>
-                <Radar data={radarData} options={radarOptions} />
-              </div>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
-                <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>📊</div>
-                <p>Complete an assessment to see your skill radar!</p>
-              </div>
-            )}
-          </div>
+      {/* Stats cards */}
+      <div className="dk-stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginBottom: 28 }}>
+        <StatCard icon="📝" iconClass="indigo" value={analytics?.total_submissions || 0} label="Assessments Taken" />
+        <StatCard icon="⭐" iconClass="amber" value={`${analytics?.average_score || 0}%`} label="Average Score" />
+        <StatCard icon="🏆" iconClass="green" value={`${analytics?.best_score || 0}%`} label="Best Score" />
+        <StatCard icon="⚡" iconClass="violet" value={analytics?.xp_points || 0} label="XP Points"
+          sub={`🔥 ${analytics?.streak_days || 0} day streak`} />
+      </div>
 
-          <div className="card card-body">
-            <h3 style={{ marginBottom: '20px', fontSize: '1rem' }}>📈 Score History</h3>
-            {analytics?.score_history?.length > 0 ? (
-              <div style={{ height: '200px' }}>
-                <Bar data={barData} options={barOptions} />
+      {/* Competitive Insights */}
+      {(analytics?.peer_percentile != null || analytics?.success_prediction != null) && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(240px, 1fr))', gap: 16, marginBottom: 28 }}>
+          {/* Peer Percentile */}
+          <div className="dk-card" style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+            <div style={{
+              width: 64, height: 64, borderRadius: '50%', flexShrink: 0,
+              background: `conic-gradient(#10b981 ${(analytics.peer_percentile || 50) * 3.6}deg, rgba(255,255,255,0.05) 0deg)`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <div style={{
+                width: 50, height: 50, borderRadius: '50%', background: 'var(--dk-bg)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '0.82rem', fontWeight: 800, color: '#10b981',
+              }}>
+                {analytics.peer_percentile || 50}%
               </div>
-            ) : (
-              <div style={{ textAlign: 'center', padding: '40px', color: 'var(--text-secondary)' }}>
-                <div style={{ fontSize: '2.5rem', marginBottom: '12px' }}>📉</div>
-                <p>No submission history yet.</p>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Adaptive Pathway */}
-        {analytics?.pathway_steps?.length > 0 && (
-          <div style={{ marginBottom: '32px' }}>
-            <div className="section-title"><h2>🧭 Your Learning Pathway</h2><div className="line" /></div>
-            <div style={{ display: 'flex', gap: '16px', flexWrap: 'wrap' }}>
-              {analytics.pathway_steps.map((step, i) => (
-                <div key={i} className="card card-body" style={{ flex: '1', minWidth: '280px' }}>
-                  <div style={{ display: 'flex', gap: '12px', marginBottom: '12px' }}>
-                    <div style={{ fontSize: '1.5rem' }}>🎯</div>
-                    <div>
-                      <div style={{ fontWeight: 700, fontSize: '0.9rem', marginBottom: '6px' }}>Personalized Recommendation</div>
-                      <p style={{ fontSize: '0.825rem', color: 'var(--text-secondary)', lineHeight: 1.5 }}>{step.reason}</p>
-                    </div>
-                  </div>
-                  {step.skill_gaps?.length > 0 && (
-                    <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
-                      {step.skill_gaps.map((gap, j) => (
-                        <span key={j} className="badge badge-warning" style={{ fontSize: '0.72rem' }}>⚠️ {gap}</span>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              ))}
+            </div>
+            <div>
+              <h4 style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--dk-text)' }}>Peer Percentile</h4>
+              <p style={{ fontSize: '0.74rem', color: 'var(--dk-text-muted)', marginTop: 2 }}>
+                Top {100 - (analytics.peer_percentile || 50)}% of all students
+              </p>
             </div>
           </div>
-        )}
 
-        {/* Assessments */}
-        <div>
-          <div className="section-title"><h2>🎓 Available Assessments</h2><div className="line" /></div>
-          {assessments.length === 0 ? (
-            <div className="card card-body" style={{ textAlign: 'center', padding: '48px' }}>
-              <div style={{ fontSize: '3rem', marginBottom: '16px' }}>📭</div>
-              <p style={{ color: 'var(--text-secondary)' }}>No assessments available yet. Check back soon!</p>
+          {/* Interview Readiness */}
+          <div className="dk-card" style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+            <div style={{
+              width: 64, height: 64, borderRadius: '50%', flexShrink: 0,
+              background: `conic-gradient(#6366f1 ${(analytics.success_prediction || 50) * 3.6}deg, rgba(255,255,255,0.05) 0deg)`,
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              <div style={{
+                width: 50, height: 50, borderRadius: '50%', background: 'var(--dk-bg)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '0.82rem', fontWeight: 800, color: '#6366f1',
+              }}>
+                {analytics.success_prediction || 50}%
+              </div>
+            </div>
+            <div>
+              <h4 style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--dk-text)' }}>Interview Readiness</h4>
+              <p style={{ fontSize: '0.74rem', color: 'var(--dk-text-muted)', marginTop: 2 }}>
+                {(analytics.success_prediction || 50) >= 80 ? '🟢 Strong candidate' : (analytics.success_prediction || 50) >= 50 ? '🟡 Building momentum' : '🔴 Keep practicing'}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Charts row */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginBottom: 28 }}>
+        <div className="dk-card">
+          <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--dk-text)', marginBottom: 20 }}>🎯 Skill Radar</h3>
+          {analytics?.total_submissions > 0 ? (
+            <div style={{ maxWidth: 280, margin: '0 auto' }}>
+              <Radar data={radarData} options={radarOptions} />
             </div>
           ) : (
-            <div className="grid-3">
-              {assessments.map(a => (
-                <div
-                  key={a.id}
-                  className="assessment-card"
-                  onClick={() => navigate(`/assessment/${a.id}`)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={e => e.key === 'Enter' && navigate(`/assessment/${a.id}`)}
-                  aria-label={`Start assessment: ${a.title}`}
-                >
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                    <div className="assessment-card-emoji">{a.thumbnail_emoji}</div>
-                    {a.user_submitted && <span className="badge badge-success">✓ Done</span>}
-                  </div>
-                  <div>
-                    <div className="assessment-card-title">{a.title}</div>
-                    <div className="assessment-card-desc">{a.description}</div>
-                  </div>
-                  <div className="assessment-card-meta">
-                    <span className={`badge ${getDifficultyBadge(a.difficulty)}`}>{a.difficulty}</span>
-                    <span className="badge badge-primary">⏱ {a.time_limit_minutes}m</span>
-                    <span className="badge badge-cyan">❓ {a.num_questions}Q</span>
-                  </div>
-                  <button className="btn btn-primary btn-sm" style={{ width: '100%', justifyContent: 'center' }}>
-                    {a.user_submitted ? `🔄 Retake` : `▶ ${t('takeAssessment')}`}
-                  </button>
-                </div>
-              ))}
+            <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--dk-text-muted)' }}>
+              <div style={{ fontSize: '2rem', marginBottom: 10 }}>📊</div>
+              <p style={{ fontSize: '0.83rem' }}>Complete an assessment to see your radar!</p>
+            </div>
+          )}
+        </div>
+
+        <div className="dk-card">
+          <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--dk-text)', marginBottom: 20 }}>📈 Score History</h3>
+          {analytics?.score_history?.length > 0 ? (
+            <div style={{ height: 190 }}>
+              <Bar data={barData} options={barOptions} />
+            </div>
+          ) : (
+            <div style={{ textAlign: 'center', padding: '32px 0', color: 'var(--dk-text-muted)' }}>
+              <div style={{ fontSize: '2rem', marginBottom: 10 }}>📉</div>
+              <p style={{ fontSize: '0.83rem' }}>No submission history yet.</p>
             </div>
           )}
         </div>
       </div>
-    </div>
+
+      {/* Daily Plan Widget */}
+      {dailyPlan && (
+        <div className="dk-card" style={{ marginBottom: 24 }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--dk-text)' }}>📋 Today's Prep Plan</h3>
+            <span style={{ fontSize: '0.72rem', color: 'var(--dk-text-muted)' }}>
+              ~{dailyPlan.estimated_total_min} min • {dailyPlan.focus_area}
+            </span>
+          </div>
+          <p style={{ fontSize: '0.82rem', color: 'var(--dk-text-muted)', marginBottom: 14 }}>{dailyPlan.greeting}</p>
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: 10 }}>
+            {dailyPlan.tasks?.map((task, i) => {
+              const typeColors = { review: '#6366f1', practice: '#10b981', challenge: '#f59e0b', mock_interview: '#a855f7' }
+              const borderColor = typeColors[task.type] || '#6366f1'
+              return (
+                <div
+                  key={i}
+                  style={{
+                    padding: '12px 14px', borderRadius: 12,
+                    background: 'rgba(255,255,255,0.02)',
+                    border: '1px solid rgba(255,255,255,0.06)',
+                    borderLeft: `3px solid ${borderColor}`,
+                    transition: 'all 0.2s ease',
+                    cursor: task.type === 'mock_interview' ? 'pointer' : 'default',
+                  }}
+                  onClick={() => task.type === 'mock_interview' && navigate('/interview')}
+                  onMouseEnter={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.04)'; e.currentTarget.style.transform = 'translateY(-2px)' }}
+                  onMouseLeave={e => { e.currentTarget.style.background = 'rgba(255,255,255,0.02)'; e.currentTarget.style.transform = 'translateY(0)' }}
+                >
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                    <span style={{ fontSize: '1.1rem' }}>{task.emoji}</span>
+                    <span style={{ fontSize: '0.82rem', fontWeight: 700, color: 'var(--dk-text)' }}>{task.title}</span>
+                    <span style={{
+                      marginLeft: 'auto', fontSize: '0.68rem', padding: '2px 8px', borderRadius: 99,
+                      background: `${borderColor}15`, color: borderColor, fontWeight: 600,
+                    }}>
+                      {task.duration_min}m
+                    </span>
+                  </div>
+                  <p style={{ fontSize: '0.76rem', color: 'var(--dk-text-muted)', lineHeight: 1.5 }}>{task.description}</p>
+                </div>
+              )
+            })}
+          </div>
+          {dailyPlan.tip && (
+            <div style={{
+              marginTop: 12, padding: '10px 14px', borderRadius: 10,
+              background: 'rgba(99,102,241,0.05)', border: '1px solid rgba(99,102,241,0.08)',
+              fontSize: '0.76rem', color: 'var(--dk-text-muted)',
+            }}>
+              💡 <strong style={{ color: 'var(--dk-text)' }}>Tip:</strong> {dailyPlan.tip}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Level Progress + Badge Showcase + Leaderboard row */}
+      {gamification && (
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginBottom: 28 }}>
+          {/* Level Progress */}
+          <div className="dk-card" style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--dk-text)' }}>🎖️ Level Progress</h3>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+              <div style={{
+                width: 52, height: 52, borderRadius: 14,
+                background: 'linear-gradient(135deg, rgba(99,102,241,0.2), rgba(168,85,247,0.2))',
+                border: '1px solid rgba(99,102,241,0.3)',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                fontSize: '1.6rem', flexShrink: 0,
+              }}>
+                {gamification.level?.emoji}
+              </div>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <span style={{ fontSize: '0.88rem', fontWeight: 700, color: 'var(--dk-text)' }}>
+                    Lv.{gamification.level?.level} {gamification.level?.name}
+                  </span>
+                  <span style={{ fontSize: '0.72rem', color: 'var(--dk-text-muted)' }}>
+                    {gamification.level?.xp_for_next > 0 ? `${gamification.level.xp_for_next} XP to next` : 'MAX LEVEL'}
+                  </span>
+                </div>
+                {/* Progress bar */}
+                <div style={{
+                  height: 8, borderRadius: 99, overflow: 'hidden',
+                  background: 'rgba(99,102,241,0.1)',
+                }}>
+                  <div style={{
+                    height: '100%', borderRadius: 99,
+                    background: 'linear-gradient(90deg, #6366f1, #a855f7)',
+                    width: `${gamification.level?.progress_pct || 0}%`,
+                    transition: 'width 1.5s cubic-bezier(0.16, 1, 0.3, 1)',
+                    boxShadow: '0 0 12px rgba(99,102,241,0.4)',
+                  }} />
+                </div>
+                <div style={{ fontSize: '0.72rem', color: 'var(--dk-text-muted)', marginTop: 4 }}>
+                  {gamification.xp_points} XP total • {gamification.total_badges}/{gamification.available_badges} badges
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* Badge Showcase */}
+          <div className="dk-card" style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--dk-text)' }}>
+              🏅 Badges Earned ({gamification.total_badges})
+            </h3>
+            {gamification.badges?.length > 0 ? (
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+                {gamification.badges.map((b, i) => (
+                  <div
+                    key={b.badge_key}
+                    title={`${b.name}: ${b.desc} (+${b.xp} XP)`}
+                    style={{
+                      width: 52, height: 52, borderRadius: 14,
+                      background: 'rgba(99,102,241,0.08)',
+                      border: '1px solid rgba(99,102,241,0.15)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '1.5rem', cursor: 'default',
+                      transition: 'all 0.3s cubic-bezier(0.16, 1, 0.3, 1)',
+                      animation: `auth-field-stagger 0.4s cubic-bezier(0.16,1,0.3,1) ${i * 0.08}s both`,
+                    }}
+                    onMouseEnter={e => {
+                      e.currentTarget.style.transform = 'scale(1.15) translateY(-4px)'
+                      e.currentTarget.style.background = 'rgba(99,102,241,0.18)'
+                      e.currentTarget.style.borderColor = 'rgba(99,102,241,0.4)'
+                      e.currentTarget.style.boxShadow = '0 8px 24px rgba(99,102,241,0.2)'
+                    }}
+                    onMouseLeave={e => {
+                      e.currentTarget.style.transform = 'scale(1) translateY(0)'
+                      e.currentTarget.style.background = 'rgba(99,102,241,0.08)'
+                      e.currentTarget.style.borderColor = 'rgba(99,102,241,0.15)'
+                      e.currentTarget.style.boxShadow = 'none'
+                    }}
+                  >
+                    {b.emoji}
+                  </div>
+                ))}
+                {/* Empty slots */}
+                {Array.from({ length: Math.max(0, gamification.available_badges - gamification.total_badges) }).slice(0, 6).map((_, i) => (
+                  <div
+                    key={`empty-${i}`}
+                    style={{
+                      width: 52, height: 52, borderRadius: 14,
+                      background: 'rgba(255,255,255,0.02)',
+                      border: '1px dashed rgba(255,255,255,0.06)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      fontSize: '1rem', color: 'rgba(255,255,255,0.1)',
+                    }}
+                  >
+                    ?
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p style={{ fontSize: '0.83rem', color: 'var(--dk-text-muted)' }}>
+                Complete assessments to earn badges! 🏅
+              </p>
+            )}
+          </div>
+
+          {/* Leaderboard */}
+          {leaderboard && (
+            <div className="dk-card" style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--dk-text)' }}>🏆 Leaderboard</h3>
+                <span style={{ fontSize: '0.72rem', color: 'var(--dk-primary-light)', fontWeight: 600 }}>
+                  Your Rank: #{leaderboard.my_rank}
+                </span>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                {leaderboard.entries.slice(0, 8).map(entry => {
+                  const isMe = entry.user_id === (user?.id || 'demo-student-001')
+                  return (
+                    <div
+                      key={entry.rank}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 10,
+                        padding: '8px 12px', borderRadius: 10,
+                        background: isMe ? 'rgba(99,102,241,0.1)' : 'transparent',
+                        border: isMe ? '1px solid rgba(99,102,241,0.2)' : '1px solid transparent',
+                        transition: 'all 0.2s ease',
+                      }}
+                    >
+                      <span style={{
+                        width: 22, fontSize: '0.78rem', fontWeight: 700, textAlign: 'center',
+                        color: entry.rank <= 3
+                          ? ['#fbbf24', '#94a3b8', '#cd7f32'][entry.rank - 1]
+                          : 'var(--dk-text-muted)',
+                      }}>
+                        {entry.rank <= 3 ? ['🥇', '🥈', '🥉'][entry.rank - 1] : `#${entry.rank}`}
+                      </span>
+                      <div style={{
+                        width: 26, height: 26, borderRadius: '50%',
+                        background: entry.avatar_color, flexShrink: 0,
+                        display: 'flex', alignItems: 'center', justifyContent: 'center',
+                        fontSize: '0.68rem', fontWeight: 700, color: '#fff',
+                      }}>
+                        {entry.name[0]}
+                      </div>
+                      <div style={{ flex: 1, minWidth: 0 }}>
+                        <div style={{
+                          fontSize: '0.8rem', fontWeight: isMe ? 700 : 500,
+                          color: isMe ? 'var(--dk-primary-light)' : 'var(--dk-text)',
+                          whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                        }}>
+                          {entry.name} {isMe && '(You)'}
+                        </div>
+                      </div>
+                      <span style={{ fontSize: '0.72rem', color: 'var(--dk-text-muted)', fontWeight: 600 }}>
+                        {entry.level_emoji} {entry.xp_points.toLocaleString()} XP
+                      </span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* My Classrooms */}
+      <div style={{ marginBottom: 32 }}>
+        <div className="dk-section-title">
+          <h2>🏫 My Classrooms</h2>
+          <div className="line" />
+          <button onClick={() => setShowJoin(true)} className="dk-btn dk-btn-primary dk-btn-sm">
+            + Join Class
+          </button>
+        </div>
+
+        {classrooms.length === 0 ? (
+          <div className="dk-card" style={{ textAlign: 'center', padding: '36px', cursor: 'pointer' }} onClick={() => setShowJoin(true)}>
+            <div style={{ fontSize: '2rem', marginBottom: 12 }}>🏫</div>
+            <div style={{ fontWeight: 600, color: 'var(--dk-text)', marginBottom: 6 }}>No classrooms yet</div>
+            <p style={{ color: 'var(--dk-text-muted)', fontSize: '0.85rem', marginBottom: 20 }}>
+              Ask your instructor for a 6-character class code to join.
+            </p>
+            <button className="dk-btn dk-btn-primary">🎓 Join a Classroom</button>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 16 }}>
+            {classrooms.map(c => (
+              <ClassroomCard key={c.id} classroom={c} variant="student" />
+            ))}
+          </div>
+        )}
+      </div>
+
+      {/* Adaptive pathway */}
+      {analytics?.pathway_steps?.length > 0 && (
+        <div style={{ marginBottom: 32 }}>
+          <div className="dk-section-title"><h2>🧭 Learning Pathway</h2><div className="line" /></div>
+          <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap' }} className="dk-stagger">
+            {analytics.pathway_steps.map((step, i) => (
+              <div key={i} className="dk-card" style={{ flex: '1', minWidth: 280 }}>
+                <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+                  <div style={{ fontSize: '1.4rem' }}>🎯</div>
+                  <div>
+                    <div style={{ fontWeight: 700, fontSize: '0.88rem', marginBottom: 6, color: 'var(--dk-text)' }}>
+                      Personalized Recommendation
+                    </div>
+                    <p style={{ fontSize: '0.82rem', color: 'var(--dk-text-muted)', lineHeight: 1.55 }}>{step.reason}</p>
+                  </div>
+                </div>
+                {step.skill_gaps?.length > 0 && (
+                  <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}>
+                    {step.skill_gaps.map((gap, j) => (
+                      <span key={j} className="badge badge-warning" style={{ fontSize: '0.7rem' }}>⚠️ {gap}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Available Assessments */}
+      <div>
+        <div className="dk-section-title"><h2>🎓 Available Assessments</h2><div className="line" /></div>
+        {assessments.length === 0 ? (
+          <div className="dk-card" style={{ textAlign: 'center', padding: '48px' }}>
+            <div style={{ fontSize: '2.5rem', marginBottom: 12 }}>📭</div>
+            <p style={{ color: 'var(--dk-text-muted)' }}>No assessments available yet. Check back soon!</p>
+          </div>
+        ) : (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: 18 }} className="dk-stagger">
+            {/* Demo Coding Challenge Card */}
+            <div
+              className="dk-assessment-card"
+              onClick={() => navigate('/demo/coding')}
+              style={{ cursor: 'pointer', border: '1px solid rgba(168,85,247,0.2)', position: 'relative', overflow: 'hidden' }}
+              role="button" tabIndex={0}
+              onKeyDown={e => e.key === 'Enter' && navigate('/demo/coding')}
+            >
+              <div style={{
+                position: 'absolute', top: 0, left: '10%', right: '10%', height: 1,
+                background: 'linear-gradient(90deg, transparent, rgba(168,85,247,0.5), transparent)',
+              }} />
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                <div style={{ fontSize: '2rem' }}>💻</div>
+                <span style={{
+                  padding: '4px 10px',
+                  borderRadius: 20,
+                  background: 'rgba(168,85,247,0.1)',
+                  border: '1px solid rgba(168,85,247,0.25)',
+                  color: '#c084fc',
+                  fontSize: '0.7rem',
+                  fontWeight: 700,
+                  letterSpacing: '0.05em',
+                  animation: 'demo-badge-pulse 3s ease-in-out infinite',
+                }}>✨ DEMO</span>
+              </div>
+              <div style={{ fontWeight: 700, fontSize: '0.95rem', color: 'var(--dk-text)', letterSpacing: '-0.02em' }}>
+                Try Demo Coding Challenge
+              </div>
+              <div style={{ fontSize: '0.83rem', color: 'var(--dk-text-muted)', lineHeight: 1.6 }}>
+                Solve a real coding problem in our AI-powered IDE. Get instant feedback on complexity, correctness, and code quality.
+              </div>
+              <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', marginTop: 'auto' }}>
+                <span className="badge badge-warning">Medium</span>
+                <span className="badge badge-primary">🐍 Python</span>
+                <span className="badge badge-cyan">🤖 AI Eval</span>
+              </div>
+              <button className="dk-btn dk-btn-primary" style={{ width: '100%', justifyContent: 'center', background: 'linear-gradient(135deg, #a855f7, #6366f1)' }}>
+                ▶ Start Challenge
+              </button>
+            </div>
+
+            {assessments.map(a => (
+              <AssessmentCard key={a.id} assessment={a} navigate={navigate} />
+            ))}
+          </div>
+        )}
+      </div>
+    </DarkLayout>
   )
 }

@@ -1,0 +1,34 @@
+﻿python.exe : Could not 
+find platform 
+independent libraries 
+<prefix>
+At line:1 char:1
++ & "c:\Users\Lenovo\Id
+eaProjects\AISSMS\.venv
+\Scripts\python.exe" 
+-c "
++ ~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~
+~~
+    + CategoryInfo     
+         : NotSpecifi  
+  ed: (Could not fin   
+ d ...raries <prefi    
+x>:String) [], Rem    
+oteException
+    + FullyQualifiedEr 
+   rorId : NativeComm  
+  andError
+ 
+  File "<string>", 
+line 16
+    print(f'Questions: 
+{len(data[" 
+questions\])}')
+                       
+          ^
+SyntaxError: 
+unterminated string 
+literal (detected at 
+line 16)

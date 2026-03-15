@@ -33,7 +33,7 @@ export default function Sidebar() {
       <div className="sidebar-brand">
         <span className="logo-icon">⚡</span>
         <span style={{ background: 'var(--grad-primary)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-          KaushalyaAI
+          InterviewVault
         </span>
       </div>
 

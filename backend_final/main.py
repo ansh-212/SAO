@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from config import settings
 from database import create_tables
-from routes import auth_routes, pdf_routes, assessment_routes, submission_routes, certificate_routes, analytics_routes, user_routes
+from routes import auth_routes, pdf_routes, assessment_routes, submission_routes, certificate_routes, analytics_routes, user_routes, gamification_routes, interview_routes, planner_routes, track_routes, remediation_routes, classroom_routes
 
 # ─── Add SkillSync backend to Python path ────────────────────────────────────
 SKILLSYNC_BACKEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "skillsync-backend")
@@ -42,13 +42,13 @@ async def lifespan(app: FastAPI):
         print(f"✅ Gemini AI configured ({settings.GEMINI_MODEL})")
 
     yield
-    print("👋 Shutting down KaushalyaAI")
+    print("👋 Shutting down InterviewVault")
 
 
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="AI-Driven Skill Assessment Platform — measures real skills, not rote knowledge",
+    description="AI-Powered Interview Preparation Platform — your vault for interview mastery",
     lifespan=lifespan
 )
 
@@ -76,6 +76,12 @@ app.include_router(submission_routes.router)
 app.include_router(certificate_routes.router)
 app.include_router(analytics_routes.router)
 app.include_router(user_routes.router)
+app.include_router(gamification_routes.router)
+app.include_router(interview_routes.router)
+app.include_router(planner_routes.router)
+app.include_router(track_routes.router)
+app.include_router(remediation_routes.router)
+app.include_router(classroom_routes.router)
 
 # Serve certificate files
 if os.path.exists(settings.CERT_DIR):

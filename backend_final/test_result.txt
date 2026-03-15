@@ -1,0 +1,78 @@
+﻿C:\Users\Lenovo\IdeaProject
+s\AISSMS\.venv\Scripts\pyth
+on.exe : Could not find 
+platform independent 
+libraries <prefix>
+At line:1 char:1
++ C:\Users\Lenovo\IdeaProje
+cts\AISSMS\.venv\Scripts\py
+thon.exe -c "impo ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~~~
+    + CategoryInfo         
+     : NotSpecified: (Cou  
+  ld not find ...raries    
+ <prefix>:String) [], R    
+emoteException
+    + FullyQualifiedErrorI 
+   d : NativeCommandError
+ 
+  File "<string>", line 1
+    import sys, os; 
+sys.path.insert(0, os.path.
+join(os.path.dirname(os.pat
+h.abspath('.')), 
+'skillsync-backend')); 
+from dotenv import 
+load_dotenv; 
+load_dotenv(); key = os.get
+env('GEMINI_API_KEY'); 
+print(f'KEY: {key[:20]}'); 
+import importlib.util; 
+spec = importlib.util.spec_
+from_file_location('skillsy
+nc_main', 
+os.path.join('..', 
+'skillsync-backend', 
+'main.py')); mod = importli
+b.util.module_from_spec(spe
+c); sys.modules['skillsync_
+main'] = mod; spec.loader.e
+xec_module(mod); 
+print('Testing generate_bat
+ch_assessment...'); result 
+= mod.generate_batch_assess
+ment('Binary search tree 
+data structure with 
+nodes', 'test'); 
+print(f'is_fallback: 
+{result.get(" is_fallback\,
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+                           
+   ^
+SyntaxError: unterminated 
+string literal (detected 
+at line 1)

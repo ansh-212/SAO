@@ -21,5 +21,5 @@ def get_db():
 
 
 def create_tables():
-    from models import User, PDF, Assessment, Submission, Certificate, PathwayStep
+    from models import User, PDF, Assessment, Submission, Certificate, PathwayStep, UserBadge, XPLog
     Base.metadata.create_all(bind=engine)

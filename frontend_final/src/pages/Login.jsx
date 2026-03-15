@@ -1,15 +1,64 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
-import { useLang } from '../context/LangContext'
+import WebGLCanvas from '../components/landing/WebGLCanvas'
+import { useMousePosition } from '../hooks/useMousePosition'
+import '../styles/auth-premium.css'
+
+/* ─── Typewriter text effect (ReactBits-inspired) ───────────────────────── */
+function TypewriterText({ text, delay = 0, speed = 40 }) {
+  const [displayed, setDisplayed] = useState('')
+  const [started, setStarted] = useState(false)
+
+  useEffect(() => {
+    const startTimer = setTimeout(() => setStarted(true), delay)
+    return () => clearTimeout(startTimer)
+  }, [delay])
+
+  useEffect(() => {
+    if (!started) return
+    if (displayed.length < text.length) {
+      const timer = setTimeout(() => {
+        setDisplayed(text.slice(0, displayed.length + 1))
+      }, speed)
+      return () => clearTimeout(timer)
+    }
+  }, [displayed, started, text, speed])
+
+  return (
+    <span>
+      {displayed}
+      {displayed.length < text.length && <span className="auth-typewriter-cursor" />}
+    </span>
+  )
+}
+
+/* ─── Floating particles (pure CSS, performant) ─────────────────────────── */
+function FloatingParticles() {
+  return (
+    <div className="auth-orbs">
+      <div className="auth-orb" />
+      <div className="auth-orb" />
+      <div className="auth-orb" />
+      <div className="auth-orb" />
+    </div>
+  )
+}
 
 export default function Login() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
-  const { login } = useAuth()
+  const [showSuccess, setShowSuccess] = useState(false)
+  const { login, enterDemoMode } = useAuth()
   const navigate = useNavigate()
+  const mouse = useMousePosition()
+  const mouseRef = useRef({ nX: 0, nY: 0 })
+
+  useEffect(() => {
+    mouseRef.current = { nX: mouse.nX, nY: mouse.nY }
+  }, [mouse.nX, mouse.nY])
 
   const handleSubmit = async (e) => {
     e.preventDefault()
@@ -17,7 +66,15 @@ export default function Login() {
     setLoading(true)
     try {
       const user = await login(email, password)
-      navigate('/dashboard')
+      setShowSuccess(true)
+      // Brief success flash before navigating
+      setTimeout(() => {
+        if (user.role === 'admin') {
+          navigate('/admin/dashboard')
+        } else {
+          navigate('/student/dashboard')
+        }
+      }, 600)
     } catch (err) {
       setError(err?.response?.data?.detail || 'Login failed. Check your credentials.')
     } finally {
@@ -26,73 +83,204 @@ export default function Login() {
   }
 
   const demoLogin = (role) => {
-    setEmail(role === 'admin' ? 'admin@kaushalya.ai' : 'student@kaushalya.ai')
+    setEmail(role === 'admin' ? 'admin@interviewvault.ai' : 'student@interviewvault.ai')
     setPassword(role === 'admin' ? 'admin123' : 'student123')
   }
 
+  const handleDemoMode = (role) => {
+    const user = enterDemoMode(role)
+    setShowSuccess(true)
+    setTimeout(() => {
+      navigate(user.role === 'admin' ? '/admin/dashboard' : '/student/dashboard')
+    }, 500)
+  }
+
   return (
-    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '24px', background: 'var(--grad-bg)' }}>
-      <div style={{ width: '100%', maxWidth: '420px' }}>
-        {/* Logo */}
-        <div style={{ textAlign: 'center', marginBottom: '32px' }}>
+    <div className="auth-vault">
+      {/* WebGL particle canvas — immersive background */}
+      <WebGLCanvas mouseRef={mouseRef} particleCount={600} />
+
+      {/* Floating ambient orbs */}
+      <FloatingParticles />
+
+      {/* Subtle cyber grid */}
+      <div className="auth-grid" />
+
+      {/* Main auth card */}
+      <div className="auth-wrapper">
+        {/* Animated logo */}
+        <div className="auth-logo">
           <Link to="/" style={{ textDecoration: 'none' }}>
-            <div style={{ fontSize: '2rem', marginBottom: '8px' }}>⚡</div>
-            <div style={{ fontFamily: 'var(--font-display)', fontSize: '1.5rem', fontWeight: 800, background: 'var(--grad-primary)', WebkitBackgroundClip: 'text', WebkitTextFillColor: 'transparent' }}>
-              KaushalyaAI
+            <div className="auth-logo-icon">⚡</div>
+            <div className="auth-logo-text">
+              Interview<span>Vault</span>
             </div>
           </Link>
-          <p style={{ color: 'var(--text-secondary)', marginTop: '8px', fontSize: '0.9rem' }}>Sign in to your account</p>
+          <div className="auth-subtitle">
+            <TypewriterText text="Sign in to the AI skill assessment vault" delay={800} speed={30} />
+          </div>
         </div>
 
-        <div className="card card-body" style={{ padding: '32px' }}>
-          {/* Demo Credentials Buttons */}
-          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px', marginBottom: '24px', paddingBottom: '24px', borderBottom: '1px solid var(--border)' }}>
-            <button onClick={() => demoLogin('admin')} className="btn btn-secondary btn-sm" style={{ justifyContent: 'center' }}>
+        {/* Glassmorphic card */}
+        <div className={`auth-card ${showSuccess ? 'auth-success-flash' : ''}`}>
+          {/* Demo access buttons */}
+          <div className="auth-demo-row">
+            <button onClick={() => demoLogin('admin')} className="auth-demo-btn" type="button">
               👑 Demo Admin
             </button>
-            <button onClick={() => demoLogin('student')} className="btn btn-secondary btn-sm" style={{ justifyContent: 'center' }}>
+            <button onClick={() => demoLogin('student')} className="auth-demo-btn" type="button">
               🎓 Demo Student
             </button>
           </div>
 
-          <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: '18px' }}>
-            {error && <div className="alert alert-error">{error}</div>}
+          <form onSubmit={handleSubmit} className="auth-form">
+            {error && (
+              <div className="auth-error">
+                <span>⚠️</span> {error}
+              </div>
+            )}
 
-            <div className="form-group">
-              <label className="form-label">Email Address</label>
-              <input
-                type="email"
-                className="form-input"
-                placeholder="you@example.com"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                required
-              />
+            <div className="auth-field">
+              <label className="auth-label">Email Address</label>
+              <div className="auth-input-wrap">
+                <input
+                  type="email"
+                  className="auth-input"
+                  placeholder="you@example.com"
+                  value={email}
+                  onChange={e => setEmail(e.target.value)}
+                  required
+                  autoComplete="email"
+                />
+              </div>
             </div>
 
-            <div className="form-group">
-              <label className="form-label">Password</label>
-              <input
-                type="password"
-                className="form-input"
-                placeholder="••••••••"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                required
-              />
+            <div className="auth-field">
+              <label className="auth-label">Password</label>
+              <div className="auth-input-wrap">
+                <input
+                  type="password"
+                  className="auth-input"
+                  placeholder="••••••••"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  required
+                  autoComplete="current-password"
+                />
+              </div>
             </div>
 
-            <button type="submit" className="btn btn-primary" disabled={loading} style={{ justifyContent: 'center', marginTop: '4px' }}>
-              {loading ? '⏳ Signing in...' : '🔓 Sign In'}
+            <button type="submit" className="auth-submit" disabled={loading || showSuccess}>
+              {showSuccess ? (
+                <>✅ Welcome back!</>
+              ) : loading ? (
+                <>
+                  <span style={{
+                    width: 18, height: 18,
+                    border: '2px solid rgba(255,255,255,0.3)',
+                    borderTopColor: '#fff',
+                    borderRadius: '50%',
+                    animation: 'dk-spin 0.6s linear infinite',
+                    display: 'inline-block',
+                  }} />
+                  Authenticating...
+                </>
+              ) : (
+                <>🔓 Sign In</>
+              )}
             </button>
           </form>
 
-          <p style={{ textAlign: 'center', marginTop: '20px', fontSize: '0.875rem', color: 'var(--text-secondary)' }}>
+          {/* Separator */}
+          <div style={{
+            display: 'flex', alignItems: 'center', gap: 12,
+            margin: '24px 0 16px',
+            opacity: 0,
+            animation: 'auth-field-stagger 0.5s cubic-bezier(0.16,1,0.3,1) 0.85s both',
+          }}>
+            <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
+            <span style={{ fontSize: '0.72rem', color: '#475569', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+              or explore
+            </span>
+            <div style={{ flex: 1, height: 1, background: 'rgba(255,255,255,0.06)' }} />
+          </div>
+
+          {/* Demo mode buttons */}
+          <div style={{
+            display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10,
+            opacity: 0,
+            animation: 'auth-field-stagger 0.5s cubic-bezier(0.16,1,0.3,1) 0.9s both',
+          }}>
+            <button
+              onClick={() => handleDemoMode('admin')}
+              type="button"
+              style={{
+                padding: '11px 14px',
+                borderRadius: 12,
+                border: '1px solid rgba(99,102,241,0.2)',
+                background: 'rgba(99,102,241,0.06)',
+                color: '#818cf8',
+                fontFamily: "'Space Grotesk', sans-serif",
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.25s ease',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'rgba(99,102,241,0.12)'
+                e.currentTarget.style.borderColor = 'rgba(99,102,241,0.4)'
+                e.currentTarget.style.transform = 'translateY(-1px)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'rgba(99,102,241,0.06)'
+                e.currentTarget.style.borderColor = 'rgba(99,102,241,0.2)'
+                e.currentTarget.style.transform = 'translateY(0)'
+              }}
+            >
+              🚀 Demo Admin
+            </button>
+            <button
+              onClick={() => handleDemoMode('student')}
+              type="button"
+              style={{
+                padding: '11px 14px',
+                borderRadius: 12,
+                border: '1px solid rgba(168,85,247,0.2)',
+                background: 'rgba(168,85,247,0.06)',
+                color: '#c084fc',
+                fontFamily: "'Space Grotesk', sans-serif",
+                fontSize: '0.8rem',
+                fontWeight: 600,
+                cursor: 'pointer',
+                transition: 'all 0.25s ease',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 6,
+              }}
+              onMouseEnter={e => {
+                e.currentTarget.style.background = 'rgba(168,85,247,0.12)'
+                e.currentTarget.style.borderColor = 'rgba(168,85,247,0.4)'
+                e.currentTarget.style.transform = 'translateY(-1px)'
+              }}
+              onMouseLeave={e => {
+                e.currentTarget.style.background = 'rgba(168,85,247,0.06)'
+                e.currentTarget.style.borderColor = 'rgba(168,85,247,0.2)'
+                e.currentTarget.style.transform = 'translateY(0)'
+              }}
+            >
+              🎓 Demo Student
+            </button>
+          </div>
+
+          <div className="auth-footer">
             No account?{' '}
-            <Link to="/register" style={{ color: 'var(--primary-light)', fontWeight: 600 }}>
-              Create one free
-            </Link>
-          </p>
+            <Link to="/register">Create one free →</Link>
+          </div>
         </div>
       </div>
     </div>

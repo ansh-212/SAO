@@ -96,6 +96,23 @@ def my_analytics(
         for p in pathway_steps
     ]
 
+    # Competitive Insights: Peer Percentile
+    # In a real app, query `percent_rank() over (order by xp_points)`. For MVP:
+    total_users = db.query(models.User).filter(models.User.role == "student").count()
+    if total_users > 1:
+        users_below = db.query(models.User).filter(
+            models.User.role == "student",
+            models.User.xp_points < (current_user.xp_points or 0)
+        ).count()
+        percentile = int((users_below / total_users) * 100)
+    else:
+        percentile = 50  # Default if alone
+
+    # Competitive Insights: Interview Readiness / Success Prediction
+    # Simple heuristic based on average score, streak, and XP
+    base_readiness = min(100, (avg_score * 0.7) + (min(current_user.streak_days or 0, 10) * 1.5) + (min((current_user.xp_points or 0) / 100, 15)))
+    success_prediction = int(max(15, base_readiness))
+
     return {
         "total_submissions": len(submissions),
         "average_score": round(avg_score, 1),
@@ -108,7 +125,9 @@ def my_analytics(
         },
         "recent_submissions": recent,
         "pathway_steps": steps,
-        "score_history": score_history
+        "score_history": score_history,
+        "peer_percentile": percentile,
+        "success_prediction": success_prediction
     }
 
 
