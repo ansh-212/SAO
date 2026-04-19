@@ -1,232 +1,183 @@
 <p align="center">
-  <h1 align="center">🧠 KaushalyaAI — AI-Driven Skill Assessment Platform</h1>
-  <p align="center">
-    <em>Measures real skills, not rote knowledge.</em>
-  </p>
-  <p align="center">
-    <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" />
-    <img src="https://img.shields.io/badge/React_19-61DAFB?style=for-the-badge&logo=react&logoColor=black" />
-    <img src="https://img.shields.io/badge/Gemini_AI-4285F4?style=for-the-badge&logo=google&logoColor=white" />
-    <img src="https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" />
-    <img src="https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white" />
-  </p>
+  <img src="https://img.shields.io/badge/InterviewVault-AI%20Interview%20Coach-6366f1?style=for-the-badge&logo=sparkles&logoColor=white" />
+</p>
+
+<h1 align="center">InterviewVault — AI Interview Coach</h1>
+
+<p align="center">
+  <em>Your personal AI-powered interview preparation platform. Build a personalised study path, learn every topic in depth, and track your progress to the offer.</em>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/FastAPI-009688?style=for-the-badge&logo=fastapi&logoColor=white" />
+  <img src="https://img.shields.io/badge/React_19-61DAFB?style=for-the-badge&logo=react&logoColor=black" />
+  <img src="https://img.shields.io/badge/Gemini_2.5_Flash-4285F4?style=for-the-badge&logo=google&logoColor=white" />
+  <img src="https://img.shields.io/badge/Perplexity_AI-20808D?style=for-the-badge&logo=perplexity&logoColor=white" />
+  <img src="https://img.shields.io/badge/SQLite-003B57?style=for-the-badge&logo=sqlite&logoColor=white" />
+  <img src="https://img.shields.io/badge/Tailwind_v4-06B6D4?style=for-the-badge&logo=tailwindcss&logoColor=white" />
+  <img src="https://img.shields.io/badge/Vite_7-646CFF?style=for-the-badge&logo=vite&logoColor=white" />
 </p>
 
 ---
 
-## 📋 Table of Contents
+## 📚 Table of Contents
 
 - [Overview](#-overview)
 - [Key Features](#-key-features)
-- [Architecture](#-architecture)
 - [Tech Stack](#-tech-stack)
 - [Project Structure](#-project-structure)
 - [Getting Started](#-getting-started)
-  - [Prerequisites](#prerequisites)
-  - [Backend Setup](#1-backend-setup)
-  - [Frontend Setup](#2-frontend-setup)
-  - [SkillSync Coding Backend](#3-skillsync-coding-backend-optional)
 - [Environment Variables](#-environment-variables)
 - [API Reference](#-api-reference)
-- [AI & Anti-Cheat Pipeline](#-ai--anti-cheat-pipeline)
-- [Proctoring System](#-proctoring-system)
-- [Multilingual Support](#-multilingual-support)
+- [Screenshots](#-screenshots)
 - [Deployment](#-deployment)
-- [Demo Credentials](#-demo-credentials)
-- [Contributing](#-contributing)
 - [License](#-license)
 
 ---
 
-## 🌟 Overview
+## 🎯 Overview
 
-**KaushalyaAI** is a full-stack, AI-powered skill assessment platform designed to evaluate **higher-order thinking** skills using Bloom's Taxonomy. Unlike traditional MCQ-based tests, KaushalyaAI generates open-ended, scenario-based, and analytical questions from uploaded PDF content, evaluates free-text answers using Google Gemini AI, and provides rich multi-dimensional feedback with anti-cheat integrity scoring.
+**InterviewVault** is a full-stack AI interview preparation platform that takes you from zero to offer-ready. Instead of generic prep, it builds a **personalised learning path** based on your job role, target company, timeline, and resume — then guides you topic by topic with AI-generated articles, adaptive quizzes, an integrated chat tutor, and real-time progress tracking.
 
-The platform features real-time **webcam-based proctoring** (face detection, gaze tracking, object detection), **AI-generated plagiarism detection**, **certificate generation with QR verification**, and an integrated **coding assessment engine** with AST-based plagiarism detection.
+### What makes it different
+
+| Feature | What it does |
+|---|---|
+| **Personalised paths** | Combines your timeline, target company (Perplexity + Gemini signals), and resume gaps into one ordered green/yellow topic list |
+| **AI-authored articles** | Each topic generates a structured, markdown-formatted article on demand — not a wall of text, but proper paragraphs, tables, and code blocks |
+| **Chat tutor** | LLM-style chat inside every article for follow-up questions and deeper dives |
+| **Adaptive quiz gate** | "Mark as Complete" requires passing a 70% quiz — fail and the topic is marked `test_pending` so nothing gets silently skipped |
+| **Practice questions** | Generates questions from the current article *and* your chat history, so practice is always in context |
+| **Company intel** | 62 companies across 8 sectors, analysed via Perplexity + Gemini for recent interview patterns |
+| **Diagnostic assessment** | Skill-level quiz at onboarding to calibrate Green vs Yellow topics from day one |
+| **Interview coach** | AI mock interviewer with real-time voice/text, adaptive follow-ups, and a detailed report card |
 
 ---
 
 ## ✨ Key Features
 
-### 🎓 Assessment Engine
-- **PDF-to-Assessment**: Upload any PDF → AI extracts content → generates Bloom's Taxonomy-aligned questions (Apply, Analyze, Evaluate, Create)
-- **Adaptive Follow-ups**: AI generates follow-up challenge questions based on student answers in real-time
-- **Multi-difficulty**: Beginner, Intermediate, Advanced question generation
-- **Timed Assessments**: Configurable time limits per assessment
+### 🗺️ Smart Learning Paths
+- **8 job roles**: Software Engineer, Data Scientist, ML Engineer, Frontend, Backend, Product Manager, DevOps, Data Analyst
+- **Green / Yellow split**: Green = must-know core topics; Yellow = extended/optional deep dives
+- **Drag-and-drop builder**: Reorder and reprioritise topics with `@dnd-kit`
+- **AI plan generator**: Fuses timeline + company + resume into one ordered, gap-aware study plan
 
-### 🤖 AI-Powered Evaluation
-- **4-Dimensional Scoring**: Each answer is scored on Depth, Accuracy, Application, and Originality (0–10 each)
-- **Rich Feedback**: Personalized AI feedback with strengths, weaknesses, and improvement suggestions per question
-- **Confidence Analysis**: AI evaluates answer confidence and certainty levels
-- **Learning Pathway Generation**: Personalized study recommendations based on identified skill gaps
+### 📖 Learning Hub & Article Engine
+- Per-topic AI articles generated by Gemini 2.5 Flash with structured markdown
+- Notes panel with debounced auto-save
+- Collapsible chat panel that expands to full-width for deep Q&A sessions
+- Article progress tracking per role
 
-### 🛡️ Anti-Cheat & Integrity System
-- **AI-Generated Content Detection**: N-gram pattern matching against known AI/ChatGPT phrases
-- **Plagiarism Detection**: Sequence matching against source PDF text and cross-submission comparison
-- **Tab-Switch Tracking**: Monitors browser focus changes during assessment
-- **Copy-Paste Detection**: Tracks clipboard usage events
-- **Webcam Proctoring**: Real-time face detection, multi-face detection, gaze tracking, and object detection (phones, books, etc.)
-- **Integrity Score**: Composite score combining all anti-cheat signals
+### ✅ Quiz & Completion System
+- Auto-generated 5-question quizzes per topic
+- **Completion gate**: topic marked `completed` only on ≥70% score
+- **`test_pending` state**: fail or defer → topic flagged, surfaced on dashboard
+- Topic Tests section on dashboard: horizontal swipe cards, score history, quick retake
 
-### 💻 Coding Assessment (SkillSync Engine)
-- **Live Code Execution**: Monaco Editor with Python code execution
-- **AST Structural Fingerprinting**: Detects plagiarism even with variable renaming, comment changes, and whitespace tricks
-- **Originality Engine**: 5-signal analysis (AST fingerprint, code skeleton ratio, behavioral signals, naming conventions, comment density)
-- **Batch Submissions**: Submit and evaluate multiple coding problems at once
+### 🏢 Company Intelligence (62 companies, 8 sectors)
+| Sector | Companies |
+|---|---|
+| Big Tech | Google, Microsoft, Apple, Amazon, Meta, Netflix, Nvidia, Tesla |
+| AI & ML | OpenAI, Anthropic, Hugging Face, Perplexity, Cohere |
+| Fintech | Stripe, PayPal, Visa, Coinbase, Robinhood, Block |
+| India Tech | Flipkart, Razorpay, Zomato, Swiggy, PhonePe, Paytm, Zerodha, CRED, Ola |
+| Mobility & Marketplaces | Uber, Lyft, Airbnb, DoorDash, Instacart, Booking.com |
+| Cloud & Infra | Snowflake, Databricks, MongoDB, Cloudflare, Datadog, HashiCorp, GitHub, GitLab |
+| Enterprise SaaS | Salesforce, Adobe, Oracle, ServiceNow, Atlassian, Workday, SAP, Shopify |
+| Finance & Trading | Goldman Sachs, JPMorgan, Morgan Stanley, Citadel, Two Sigma, Jane Street |
+| Social & Consumer | LinkedIn, TikTok, Snap, Pinterest, Spotify, Discord, Reddit, X |
 
-### 📜 Certificates
-- **Auto-Generated Certificates**: Beautiful PNG certificates with gradient borders and decorative elements
-- **QR Code Verification**: Each certificate has a unique QR code for third-party verification
-- **Downloadable & Shareable**: Direct download links and verification endpoints
+### 🎙️ AI Interview Coach
+- Text + voice mock interviews
+- Adaptive follow-up questions
+- Detailed per-question report cards (depth, accuracy, confidence)
+- Full interview history with session replay
 
-### 👤 User Management
-- **Role-Based Access**: Student and Admin roles with protected routes
-- **XP & Streak System**: Gamified learning with XP points and daily streaks
-- **Student Portfolio**: Track all assessments, scores, certificates, and learning progress
-- **Profile Customization**: Bio, college, phone, avatar color, preferred language
-
-### 📊 Analytics Dashboard
-- **Admin Dashboard**: Overview of all assessments, submissions, and platform statistics
-- **Student Dashboard**: Personal performance metrics, score trends, and skill radar
-- **Assessment Analytics**: Per-assessment completion rates, average scores, and difficulty distribution
-
----
-
-## 🏗️ Architecture
-
-```
-┌─────────────────────────────────┐
-│         React 19 Frontend       │
-│   (Vite + React Router + Axios) │
-│   Webcam Proctoring (face-api)  │
-│   Monaco Editor (Coding)        │
-└──────────────┬──────────────────┘
-               │  HTTP/REST (JWT Auth)
-               │  Proxy: /api → :8000
-               ▼
-┌─────────────────────────────────┐
-│       FastAPI Backend           │
-│   KaushalyaAI Core (port 8000) │
-│                                 │
-│  ┌──────────┐  ┌──────────────┐│
-│  │ AI Svc   │  │ Anti-Cheat   ││
-│  │ (Gemini) │  │ Service      ││
-│  └──────────┘  └──────────────┘│
-│  ┌──────────┐  ┌──────────────┐│
-│  │ Cert Svc │  │ Whisper Svc  ││
-│  │ (PIL+QR) │  │ (Audio STT)  ││
-│  └──────────┘  └──────────────┘│
-│                                 │
-│  ┌─────────────────────────────┐│
-│  │  SkillSync Coding Backend   ││
-│  │  Mounted at /api/coding     ││
-│  │  (Plagiarism + Originality) ││
-│  └─────────────────────────────┘│
-│                                 │
-│  SQLite Database (kaushalya.db) │
-└─────────────────────────────────┘
-```
+### 🧭 Onboarding & Diagnostics
+- Resume PDF upload → Gemini analysis → role suggestions
+- Diagnostic quiz calibrates initial topic knowledge levels
+- Multi-role support: prepare for multiple roles simultaneously, switch anytime
 
 ---
 
 ## 🛠️ Tech Stack
 
 ### Backend
-| Technology | Purpose |
+| Layer | Technology |
 |---|---|
-| **FastAPI** | High-performance async Python web framework |
-| **SQLAlchemy** | ORM for database models and queries |
-| **SQLite** | Lightweight embedded database |
-| **Google Gemini AI** (`gemini-2.5-flash`) | Question generation, answer evaluation, pathway recommendation |
-| **OpenAI Whisper** | Audio transcription for voice-based answers |
-| **Pillow + qrcode** | Certificate image generation with QR codes |
-| **pdfplumber** | PDF text extraction |
-| **sentence-transformers** | Semantic similarity for plagiarism detection |
-| **python-jose + bcrypt** | JWT authentication and password hashing |
-| **scikit-learn** | TF-IDF vectorization for text plagiarism detection |
+| Framework | FastAPI 0.109 |
+| Database | SQLite + SQLAlchemy 2.0 |
+| Auth | JWT (python-jose + bcrypt) |
+| AI — articles, quizzes, chat | Google Gemini 2.5 Flash (`google-generativeai`) |
+| AI — company intel | Perplexity Sonar API + Gemini synthesis |
+| PDF parsing | pdfplumber + PyMuPDF |
+| Voice | OpenAI Whisper |
+| Embeddings | sentence-transformers |
 
 ### Frontend
-| Technology | Purpose |
+| Layer | Technology |
 |---|---|
-| **React 19** | UI framework with hooks |
-| **Vite 7** | Lightning-fast dev server and bundler |
-| **React Router 7** | Client-side routing with protected routes |
-| **Axios** | HTTP client with JWT interceptors |
-| **face-api.js** | Face detection, landmark detection, expression recognition |
-| **TensorFlow.js + COCO-SSD** | Real-time object detection (phone, book detection) |
-| **Monaco Editor** | VS Code-like code editor for coding assessments |
-| **Recharts + Chart.js** | Data visualization and analytics charts |
-| **Lucide React** | Icon library |
+| Framework | React 19 + Vite 7 |
+| Styling | Tailwind CSS v4 + custom dark glassmorphic design system |
+| UI components | shadcn/ui (Radix UI primitives) |
+| Animations | Framer Motion 12 |
+| Drag & drop | @dnd-kit |
+| Data fetching | TanStack React Query v5 |
+| Markdown | react-markdown + remark-gfm |
+| Charts | Recharts + Chart.js |
+| 3D / WebGL | React Three Fiber + Three.js |
+| Code editor | Monaco Editor |
 
 ---
 
-## 📂 Project Structure
+## 📁 Project Structure
 
 ```
-SAO-1/
-├── backend_final/              # Main FastAPI backend
-│   ├── main.py                 # App entry point, lifespan, CORS, router mounting
-│   ├── config.py               # Pydantic settings (env vars, paths, API keys)
-│   ├── database.py             # SQLAlchemy engine, session, table creation
-│   ├── models.py               # ORM models (User, PDF, Assessment, Submission, Certificate, PathwayStep)
-│   ├── schemas.py              # Pydantic request/response schemas
-│   ├── auth.py                 # JWT auth, password hashing, role guards
-│   ├── seed_data.py            # Demo data auto-seeder (runs on first startup)
-│   ├── requirements.txt        # Python dependencies
+SAO/
+├── backend_final/
 │   ├── routes/
-│   │   ├── auth_routes.py      # POST /register, /login, GET /me
-│   │   ├── pdf_routes.py       # POST /upload, GET /list
-│   │   ├── assessment_routes.py# CRUD assessments, follow-up generation
-│   │   ├── submission_routes.py# Submit answers, audio upload, AI evaluation
-│   │   ├── certificate_routes.py# Generate, download, verify certificates
-│   │   ├── analytics_routes.py # Admin/student analytics endpoints
-│   │   └── user_routes.py      # Profile management
+│   │   ├── onboarding_routes.py       # Role selection, resume analysis
+│   │   ├── learning_path_routes.py    # Path CRUD, personalization, plan generation
+│   │   ├── topic_routes.py            # Articles, quizzes, notes, chat, practice Qs
+│   │   ├── company_routes.py          # Company intel (62 companies, Perplexity+Gemini)
+│   │   ├── diagnostic_routes.py       # Skill calibration quiz
+│   │   └── interview_session_routes.py
 │   ├── services/
-│   │   ├── ai_service.py       # Gemini AI: question gen, evaluation, pathways
-│   │   ├── anticheat_service.py# Plagiarism, AI detection, integrity scoring
-│   │   ├── certificate_service.py# PNG cert generation with QR codes
-│   │   ├── whisper_service.py  # Audio transcription via Whisper
-│   │   └── pdf_service.py      # PDF parsing and text extraction
-│   ├── uploads/                # Uploaded PDF storage
-│   └── certificates/           # Generated certificate images
+│   │   ├── ai_service.py              # Gemini wrapper
+│   │   ├── learning_path_service.py   # Standard paths, resume analysis
+│   │   ├── perplexity_service.py      # Company interview data scraping
+│   │   ├── interview_report_service.py
+│   │   └── skill_profile_service.py
+│   ├── models.py                      # SQLAlchemy ORM models
+│   ├── config.py                      # Settings (all secrets from .env)
+│   ├── database.py                    # DB init + migrations
+│   ├── auth.py                        # JWT auth middleware
+│   └── main.py                        # FastAPI app entry point
 │
-├── frontend_final/             # React 19 + Vite frontend
-│   ├── package.json            # Node dependencies
-│   ├── vite.config.js          # Vite config with API proxy to :8000
-│   ├── index.html              # HTML entry point
-│   ├── src/
-│   │   ├── App.jsx             # Root component with routing
-│   │   ├── main.jsx            # React DOM entry
-│   │   ├── api/
-│   │   │   └── client.js       # Axios instance with JWT interceptors
-│   │   ├── context/
-│   │   │   ├── AuthContext.jsx  # Authentication state management
-│   │   │   └── LangContext.jsx  # i18n translations (EN/HI/MR)
-│   │   ├── pages/
-│   │   │   ├── Landing.jsx     # Public landing page
-│   │   │   ├── Login.jsx       # Login form
-│   │   │   ├── Register.jsx    # Registration form
-│   │   │   ├── StudentDashboard.jsx  # Student home with assessments
-│   │   │   ├── AdminDashboard.jsx    # Admin panel with analytics
-│   │   │   ├── TakeAssessment.jsx    # Assessment-taking interface
-│   │   │   ├── AssessmentResult.jsx  # Detailed result view
-│   │   │   ├── Portfolio.jsx         # Student portfolio & certificates
-│   │   │   ├── Profile.jsx          # Profile editing
-│   │   │   └── CodingSkills.jsx     # Coding assessment (Monaco Editor)
-│   │   └── components/
-│   │       ├── Proctor.jsx     # Webcam proctoring (face-api + COCO-SSD)
-│   │       ├── ProctorStats.jsx# Proctoring statistics display
-│   │       └── Sidebar.jsx     # Navigation sidebar
-│   └── public/
-│       └── models/             # face-api.js pre-trained model weights
-│
-├── skillsync-backend/          # Coding assessment microservice
-│   ├── main.py                 # FastAPI app: code execution, Gemini analysis
-│   ├── plagiarism_engine.py    # AST-based code plagiarism detection
-│   ├── originality_engine.py   # 5-signal originality analysis engine
-│   └── test_full_flow.py       # Integration tests
-│
-└── README.md                   # ← You are here
+└── frontend_final/
+    ├── src/
+    │   ├── pages/
+    │   │   ├── Onboarding.jsx         # Role pick + resume upload
+    │   │   ├── OnboardingDiagnostic.jsx
+    │   │   ├── LearningHub.jsx        # Topic dashboard, filters, progress
+    │   │   ├── LearningModuleDetail.jsx # Article + notes + chat + quiz
+    │   │   ├── LearningPathBuilder.jsx  # Drag-and-drop path config
+    │   │   ├── PlanPersonalization.jsx  # Timeline + company + resume → AI plan
+    │   │   ├── StudentDashboard.jsx
+    │   │   ├── InterviewCoach.jsx
+    │   │   ├── InterviewHistory.jsx
+    │   │   └── InterviewReport.jsx
+    │   ├── components/
+    │   │   ├── dashboard/LearnTab.jsx  # Learn tab with topic tests section
+    │   │   ├── layout/DarkLayout.jsx   # Sidebar + dark-app wrapper
+    │   │   ├── ui/                     # shadcn/ui primitives (dk-glass-* enhanced)
+    │   │   └── landing/
+    │   ├── styles/
+    │   │   ├── dashboard-dark.css     # Global dark glassmorphic design system
+    │   │   └── shadcn.css
+    │   ├── api/client.js              # Axios client + all API helpers
+    │   └── lib/queries.js             # TanStack React Query hooks
+    └── package.json
 ```
 
 ---
@@ -234,289 +185,162 @@ SAO-1/
 ## 🚀 Getting Started
 
 ### Prerequisites
-
-- **Python 3.10+**
-- **Node.js 18+** and **npm**
-- **Google Gemini API Key** ([Get one free](https://aistudio.google.com/apikey))
+- Python 3.11+
+- Node.js 18+
+- Google Gemini API key — [get one free](https://aistudio.google.com/app/apikey)
+- Perplexity API key (optional, for company intel) — [console.perplexity.ai](https://console.perplexity.ai)
 
 ### 1. Backend Setup
 
 ```bash
-# Navigate to backend
 cd backend_final
 
 # Create virtual environment
 python -m venv venv
-
-# Activate (Windows)
-venv\Scripts\activate
-# Activate (macOS/Linux)
-# source venv/bin/activate
+source venv/bin/activate        # Windows: venv\Scripts\activate
 
 # Install dependencies
 pip install -r requirements.txt
 
-# Create .env file
-echo "GEMINI_API_KEY=your_gemini_api_key_here" > .env
-echo "SECRET_KEY=your-secret-key-change-in-production" >> .env
+# Create .env
+cp .env.example .env
+# Fill in GEMINI_API_KEY and PERPLEXITY_API_KEY
 
-# Run the server
-uvicorn main:app --reload --host 0.0.0.0 --port 8000
+# Run
+uvicorn main:app --reload --port 8000
 ```
-
-The backend will:
-- Auto-create the SQLite database (`kaushalya.db`)
-- Auto-seed demo assessments and users on first run
-- Serve API docs at [http://localhost:8000/docs](http://localhost:8000/docs)
 
 ### 2. Frontend Setup
 
 ```bash
-# Navigate to frontend
 cd frontend_final
 
-# Install dependencies
 npm install
-
-# Start dev server
 npm run dev
+# → http://localhost:5173
 ```
 
-The frontend starts at [http://localhost:5173](http://localhost:5173) and automatically proxies `/api` requests to the backend at `:8000`.
-
-### 3. SkillSync Coding Backend (Optional)
-
-The coding assessment engine is **automatically mounted** by the main backend at startup. No separate setup is needed — when the main backend starts, it detects the `skillsync-backend/` directory and mounts all its routes under `/api/coding/*`.
-
-If you need to run it independently:
+### 3. Build for Production
 
 ```bash
-cd skillsync-backend
-pip install fastapi uvicorn python-dotenv google-generativeai PyMuPDF beautifulsoup4 scikit-learn
-uvicorn main:app --port 8001
+cd frontend_final
+npm run build          # outputs to dist/
+
+cd backend_final
+uvicorn main:app --host 0.0.0.0 --port 8000
 ```
 
 ---
 
-## 🔐 Environment Variables
+## 🔑 Environment Variables
 
-Create a `.env` file in the `backend_final/` directory:
+Create `backend_final/.env`:
 
-| Variable | Required | Default | Description |
-|---|---|---|---|
-| `GEMINI_API_KEY` | ✅ Yes | — | Google Gemini API key for AI features |
-| `SECRET_KEY` | ✅ Yes | `kaushalya-super-secret-key...` | JWT signing secret (change in production!) |
-| `DATABASE_URL` | No | `sqlite:///./kaushalya.db` | SQLAlchemy database connection string |
-| `FRONTEND_URL` | No | `http://localhost:5173` | Frontend URL for CORS and certificate QR links |
-| `BACKEND_URL` | No | `http://localhost:8000` | Backend URL for QR verification links |
+```env
+# Required
+GEMINI_API_KEY=your_gemini_key_here
+SECRET_KEY=your_jwt_secret_change_in_production
+
+# Optional — enables company intelligence feature
+PERPLEXITY_API_KEY=your_perplexity_key_here
+
+# URLs (defaults work for local dev)
+FRONTEND_URL=http://localhost:5173
+BACKEND_URL=http://localhost:8000
+```
+
+> ⚠️ **Never commit `.env` to git.** It is already listed in `.gitignore`.
 
 ---
 
 ## 📡 API Reference
 
-### Authentication
+All endpoints are prefixed with `/api`. Auth is JWT Bearer token (header: `Authorization: Bearer <token>`).
+
+### Auth
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/api/auth/register` | Register new user (student/admin) |
-| `POST` | `/api/auth/login` | Login and receive JWT token |
-| `GET` | `/api/auth/me` | Get current authenticated user |
+| `POST` | `/auth/register` | Register new user |
+| `POST` | `/auth/login` | Login → returns JWT |
 
-### PDFs
+### Onboarding
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/api/pdfs/upload` | Upload PDF → extract text → generate assessment |
-| `GET` | `/api/pdfs/list` | List all uploaded PDFs |
+| `GET` | `/onboarding/status` | Check onboarding state |
+| `GET` | `/onboarding/roles` | Available job roles |
+| `POST` | `/onboarding/analyze-resume` | Upload PDF → role suggestions |
+| `POST` | `/onboarding/select-role` | Pick role, init learning path |
+| `POST` | `/onboarding/complete` | Mark onboarding done |
 
-### Assessments
+### Learning Path
 | Method | Endpoint | Description |
 |---|---|---|
-| `GET` | `/api/assessments` | List all assessments (with filters) |
-| `GET` | `/api/assessments/{id}` | Get assessment details with questions |
-| `POST` | `/api/assessments` | Create assessment (admin) |
-| `POST` | `/api/assessments/{id}/followup` | Generate adaptive follow-up question |
-| `DELETE` | `/api/assessments/{id}` | Delete assessment (admin) |
+| `GET` | `/learning-path/my` | Active path with topic progress |
+| `GET` | `/learning-path/all` | All paths across roles |
+| `POST` | `/learning-path/configure` | Save green/yellow topic lists |
+| `PUT` | `/learning-path/personalize` | Apply timeline / company |
+| `POST` | `/learning-path/generate-plan` | AI fused plan (timeline + company + resume) |
+| `POST` | `/learning-path/switch` | Switch active role |
+| `GET` | `/learning-path/topic-progress` | Per-topic progress records |
 
-### Submissions
+### Topics
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/api/submissions` | Submit answers → AI evaluation → scoring |
-| `POST` | `/api/submissions/{id}/audio` | Upload audio recording for transcription |
-| `GET` | `/api/submissions/mine` | Get current user's submissions |
-| `GET` | `/api/submissions/{id}` | Get detailed submission result |
+| `GET` | `/topics/{topic}/article` | Generate / return cached AI article |
+| `POST` | `/topics/{topic}/quiz` | Generate 5-question quiz |
+| `POST` | `/topics/{topic}/quiz/submit` | Submit answers, get score + status update |
+| `GET/PUT` | `/topics/{topic}/notes` | Fetch / save personal notes |
+| `POST` | `/topics/{topic}/chat` | Chat message with history |
+| `POST` | `/topics/{topic}/practice-questions` | Context-aware practice questions |
+| `PUT` | `/topics/{topic}/status` | Directly update topic status |
 
-### Certificates
+### Company Intelligence
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/api/certificates/generate/{submission_id}` | Generate certificate for a submission |
-| `GET` | `/api/certificates/download/{qr_hash}` | Download certificate image |
-| `GET` | `/api/certificates/verify/{qr_hash}` | Verify certificate authenticity |
-| `GET` | `/api/certificates/mine` | List user's certificates |
+| `GET` | `/companies` | List all 62 companies |
+| `GET` | `/companies/{slug}/insights` | Cached insights for company + role |
+| `POST` | `/companies/analyze` | Trigger Perplexity + Gemini analysis |
+| `POST` | `/companies/{slug}/apply-to-path` | Reorder learning path by company weights |
 
-### Coding (SkillSync)
+### Interview
 | Method | Endpoint | Description |
 |---|---|---|
-| `POST` | `/api/coding/execute` | Execute Python code |
-| `POST` | `/api/coding/submit` | Submit coding solution for evaluation |
-| `POST` | `/api/coding/batch-submit` | Batch submit multiple solutions |
-
-### Users & Analytics
-| Method | Endpoint | Description |
-|---|---|---|
-| `GET` | `/api/users/me` | Get user profile |
-| `PUT` | `/api/users/profile` | Update user profile |
-
-> 📖 Full interactive API docs available at **`/docs`** (Swagger UI) when the backend is running.
-
----
-
-## 🤖 AI & Anti-Cheat Pipeline
-
-When a student submits an assessment, the following pipeline executes:
-
-```
-Student Submits Answers
-        │
-        ▼
-┌──────────────────────┐
-│  1. Anti-Cheat Check  │  Plagiarism vs source PDF
-│     (anticheat_svc)   │  Cross-submission similarity
-│                       │  AI phrase detection (30+ patterns)
-│                       │  Tab-switch & copy-paste counts
-└──────────┬───────────┘
-           ▼
-┌──────────────────────┐
-│  2. AI Evaluation     │  Gemini scores each answer on:
-│     (ai_service)      │  • Depth (0-10)
-│                       │  • Accuracy (0-10)
-│                       │  • Application (0-10)
-│                       │  • Originality (0-10)
-│                       │  + Detailed text feedback
-└──────────┬───────────┘
-           ▼
-┌──────────────────────┐
-│  3. AI Detection      │  Detects if answers are
-│     (ai_service)      │  AI-generated using Gemini
-└──────────┬───────────┘
-           ▼
-┌──────────────────────┐
-│  4. Confidence Score  │  Analyzes answer certainty
-│     (ai_service)      │  and conviction level
-└──────────┬───────────┘
-           ▼
-┌──────────────────────┐
-│  5. Learning Pathway  │  Identifies skill gaps
-│     (ai_service)      │  Recommends study topics
-│                       │  Suggests next assessments
-└──────────┬───────────┘
-           ▼
-    Result + Certificate
-```
-
----
-
-## 📹 Proctoring System
-
-The frontend includes a real-time AI-powered proctoring component (`Proctor.jsx`) that runs entirely in the browser:
-
-| Signal | Technology | What It Detects |
-|---|---|---|
-| **Face Presence** | face-api.js | No face / face left frame |
-| **Multiple Faces** | face-api.js | Another person in frame |
-| **Gaze Tracking** | Face landmarks (68-point) | Looking away from screen |
-| **Object Detection** | TensorFlow.js COCO-SSD | Phone, book, laptop, etc. |
-| **Expression Analysis** | face-api.js expressions | Stress / confusion indicators |
-
-All proctoring data is aggregated into:
-- **Confidence Score**: Based on face presence % and gaze-on % 
-- **Integrity Score**: Starts at 100, deductions for violations
-- **Violation Log**: Timestamped list of all detected incidents
-
----
-
-## 🌐 Multilingual Support
-
-KaushalyaAI supports three languages out of the box:
-
-| Language | Code | Coverage |
-|---|---|---|
-| 🇬🇧 English | `en` | Full UI + AI-generated questions |
-| 🇮🇳 Hindi | `hi` | Full UI + AI-generated questions |
-| 🇮🇳 Marathi | `mr` | Full UI + AI-generated questions |
-
-Language selection is available per user profile and affects:
-- All UI text (translations via `LangContext`)
-- AI-generated assessment questions
-- AI evaluation feedback
-- Certificate text
+| `POST` | `/interview-sessions` | Start mock interview session |
+| `GET` | `/interview-sessions` | Session history |
+| `GET` | `/interview-sessions/{id}` | Full session report |
 
 ---
 
 ## 🚢 Deployment
 
-The project includes deployment configurations for multiple platforms:
+The project ships with Railway and Render configuration files.
 
-### Railway
+### Railway (Backend)
 ```bash
-# backend_final/railway.json and nixpacks.toml included
-# Deploy via Railway CLI or GitHub integration
+# railway.json and nixpacks.toml are already configured
+railway up
 ```
 
-### Render
-```bash
-# backend_final/render.yaml included
-# Connect GitHub repo → auto-deploy
+### Render (Backend)
+```yaml
+# render.yaml is already configured
+# Set env vars in Render dashboard
 ```
 
-### Vercel (Frontend)
+### Frontend (Vercel / Netlify)
 ```bash
-# frontend_final/vercel.json included
-cd frontend_final
-npx vercel
-```
-
-### Docker (Manual)
-```bash
-# Backend
-cd backend_final
-pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8000
-
-# Frontend
 cd frontend_final
 npm run build
-# Serve dist/ with any static server (Caddy, Nginx, etc.)
+# Deploy the dist/ folder
+# Set VITE_API_URL to your backend URL
 ```
 
 ---
 
-## 🔑 Demo Credentials
+## 📄 License
 
-On first startup, the backend auto-seeds demo data. Use these credentials:
-
-| Role | Email | Password |
-|---|---|---|
-| 👨‍🎓 Student | `student@kaushalya.ai` | `student123` |
-| 👨‍💼 Admin | `admin@kaushalya.ai` | `admin123` |
-
-> The seeder also creates 5 pre-built assessments covering Machine Learning, Web Development, Data Structures, Cybersecurity, and Cloud Computing.
+MIT License — see [LICENSE](LICENSE) for details.
 
 ---
 
-## 🤝 Contributing
-
-1. **Fork** the repository
-2. **Create** a feature branch: `git checkout -b feature/amazing-feature`
-3. **Commit** your changes: `git commit -m 'Add amazing feature'`
-4. **Push** to the branch: `git push origin feature/amazing-feature`
-5. **Open** a Pull Request
-
-### Development Tips
-- Backend API docs: [http://localhost:8000/docs](http://localhost:8000/docs)
-- Frontend hot-reload: `npm run dev` in `frontend_final/`
-- Database resets: Delete `kaushalya.db` and restart backend for fresh seed data
-- AI fallback: If `GEMINI_API_KEY` is not set, the platform uses hardcoded fallback evaluations
-
----
-
-
-
+<p align="center">Built with ❤️ using Gemini AI · FastAPI · React 19 · Tailwind CSS v4</p>
