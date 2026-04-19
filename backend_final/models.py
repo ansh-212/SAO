@@ -1,6 +1,6 @@
 from datetime import datetime
 import json
-from sqlalchemy import Column, Integer, String, Text, Float, Boolean, DateTime, ForeignKey, JSON
+from sqlalchemy import Column, Integer, String, Text, Float, Boolean, DateTime, ForeignKey, JSON, UniqueConstraint
 from sqlalchemy.orm import relationship
 from database import Base
 
@@ -24,6 +24,10 @@ class User(Base):
     bio = Column(Text, default="")
     level = Column(Integer, default=1)
     last_streak_date = Column(DateTime, nullable=True)
+    # Onboarding
+    onboarding_complete = Column(Boolean, default=False)
+    target_role = Column(String(100), default="")
+    resume_text = Column(Text, default="")
 
     pdfs = relationship("PDF", back_populates="uploader")
     submissions = relationship("Submission", back_populates="user")
@@ -186,3 +190,118 @@ class ClassroomAssessment(Base):
     classroom = relationship("Classroom", back_populates="assessments")
     assessment = relationship("Assessment")
 
+
+# ─── New InterviewVault V2 Models ───────────────────────────────────────────
+
+class UserSkillProfile(Base):
+    """Per-topic mastery score, updated after every test/interview."""
+    __tablename__ = "user_skill_profiles"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    topic = Column(String(200), nullable=False)
+    job_role = Column(String(100), default="")
+    skill_score = Column(Float, default=0.0)       # 0–100
+    confidence_score = Column(Float, default=50.0) # 0–100
+    last_updated = Column(DateTime, default=datetime.utcnow)
+    history = Column(JSON, default=list)           # [{score, date}]
+
+    user = relationship("User", foreign_keys=[user_id])
+
+
+class LearningPath(Base):
+    """User's learning path for a specific role.
+
+    A user may have several rows here — one per `job_role` they're preparing for.
+    The *active* path is whichever row matches `User.target_role`.
+    """
+    __tablename__ = "learning_paths"
+    __table_args__ = (
+        UniqueConstraint("user_id", "job_role", name="uq_learning_paths_user_role"),
+    )
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False, index=True)
+    job_role = Column(String(100), nullable=False)
+    green_topics = Column(JSON, default=list)   # ordered, committed topics
+    yellow_topics = Column(JSON, default=list)  # optional/extended topics
+    time_mode = Column(String(20), nullable=True)  # 24h/1w/1m/3m/6m
+    company = Column(String(200), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    last_modified = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", foreign_keys=[user_id])
+
+
+class UserTopicProgress(Base):
+    """Progress through individual topics in the learning path."""
+    __tablename__ = "user_topic_progress"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    topic = Column(String(200), nullable=False)
+    job_role = Column(String(100), default="")
+    status = Column(String(20), default="not_started")  # not_started/in_progress/completed
+    quiz_scores = Column(JSON, default=list)    # [{score, date, level}]
+    notes = Column(Text, default="")
+    article_read = Column(Boolean, default=False)
+    article_content = Column(Text, default="")  # cached Gemini article
+    completed_at = Column(DateTime, nullable=True)
+
+    user = relationship("User", foreign_keys=[user_id])
+
+
+class DiagnosticSession(Base):
+    """Adaptive diagnostic test session and results."""
+    __tablename__ = "diagnostic_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    job_role = Column(String(100), nullable=False)
+    status = Column(String(20), default="in_progress")  # in_progress/completed
+    results = Column(JSON, default=dict)  # {topic: {level_reached, score}}
+    current_topic_index = Column(Integer, default=0)
+    current_difficulty = Column(String(20), default="easy")
+    started_at = Column(DateTime, default=datetime.utcnow)
+    completed_at = Column(DateTime, nullable=True)
+
+    user = relationship("User", foreign_keys=[user_id])
+
+
+class CompanyInsight(Base):
+    """Cached company-specific interview intelligence (Perplexity + Gemini)."""
+    __tablename__ = "company_insights"
+
+    id = Column(Integer, primary_key=True, index=True)
+    company_name = Column(String(200), nullable=False, index=True)
+    company_slug = Column(String(200), nullable=False, index=True)
+    job_role = Column(String(200), nullable=False)
+    logo_url = Column(String(500), default="")
+    topics = Column(JSON, default=list)          # priority-ordered list
+    topic_weights = Column(JSON, default=dict)   # {topic: weight 0-100}
+    patterns = Column(JSON, default=list)        # [pattern description strings]
+    analysis_summary = Column(Text, default="")
+    source_data = Column(Text, default="")       # raw Perplexity output
+    domain = Column(String(100), default="")
+    analyzed_at = Column(DateTime, default=datetime.utcnow)
+
+
+class InterviewSession(Base):
+    """Full interview session — transcript, report, behavioral stats."""
+    __tablename__ = "interview_sessions"
+
+    id = Column(Integer, primary_key=True, index=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    mode = Column(String(30), default="studied_topics")
+    job_role = Column(String(100), default="")
+    company = Column(String(200), nullable=True)
+    topics_covered = Column(JSON, default=list)
+    transcript = Column(JSON, default=list)         # [{role, content, timestamp}]
+    report = Column(JSON, default=dict)
+    behavioral_stats = Column(JSON, default=dict)   # extensible for multi-camera
+    communication_analysis = Column(JSON, default=dict)
+    overall_score = Column(Float, nullable=True)
+    verdict = Column(String(50), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    user = relationship("User", foreign_keys=[user_id])

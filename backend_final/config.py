@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str = os.getenv("GEMINI_API_KEY", "")
     GEMINI_MODEL: str = "gemini-2.5-flash"
 
+    # Perplexity AI (for company intelligence / real-time search)
+    PERPLEXITY_API_KEY: str = os.getenv("PERPLEXITY_API_KEY", "")
+    PERPLEXITY_MODEL: str = "sonar"
+
     # Uploads
     UPLOAD_DIR: str = "uploads"
     CERT_DIR: str = "certificates"
@@ -34,6 +38,7 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        extra = "ignore"
 
 
 settings = Settings()

@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from contextlib import asynccontextmanager
 from config import settings
 from database import create_tables
-from routes import auth_routes, pdf_routes, assessment_routes, submission_routes, certificate_routes, analytics_routes, user_routes, gamification_routes, interview_routes, planner_routes, track_routes, remediation_routes, classroom_routes
+from routes import auth_routes, pdf_routes, assessment_routes, submission_routes, certificate_routes, analytics_routes, user_routes, gamification_routes, interview_routes, planner_routes, track_routes, remediation_routes, classroom_routes, company_routes, learning_path_routes, onboarding_routes, topic_routes, diagnostic_routes, interview_session_routes
 
 # ─── Add SkillSync backend to Python path ────────────────────────────────────
 SKILLSYNC_BACKEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "skillsync-backend")
@@ -82,6 +82,12 @@ app.include_router(planner_routes.router)
 app.include_router(track_routes.router)
 app.include_router(remediation_routes.router)
 app.include_router(classroom_routes.router)
+app.include_router(company_routes.router)
+app.include_router(learning_path_routes.router)
+app.include_router(onboarding_routes.router)
+app.include_router(topic_routes.router)
+app.include_router(diagnostic_routes.router)
+app.include_router(interview_session_routes.router)
 
 # Serve certificate files
 if os.path.exists(settings.CERT_DIR):

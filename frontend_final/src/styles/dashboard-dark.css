@@ -1043,3 +1043,421 @@
         box-shadow: 0 0 40px rgba(99, 102, 241, 0.4), 0 0 60px rgba(168, 85, 247, 0.2);
     }
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+ * AI INTERVIEW COACH design system — global propagation layer
+ *
+ * Every shadcn primitive (Card / Button / Tabs / Badge / Input / Textarea
+ * / Dialog) carries a `dk-glass-*` identifier class. The rules below are
+ * scoped to `.dark-app`, so they ONLY take effect on dashboard pages that
+ * sit inside `<DarkLayout>`. Result: Onboarding, LearningHub, PathBuilder,
+ * /plan and LearningModuleDetail all pick up the polished glassmorphic
+ * look without rewriting their JSX.
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/* ── Card: glassmorphic surface, 20px radius, subtle hover lift ──────── */
+.dark-app .dk-glass-card {
+    background: var(--dk-surface) !important;
+    border: 1px solid var(--dk-border) !important;
+    border-radius: 20px !important;
+    backdrop-filter: blur(20px) saturate(160%) !important;
+    -webkit-backdrop-filter: blur(20px) !important;
+    box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 8px 32px rgba(0, 0, 0, 0.4) !important;
+    transition: border-color 0.25s ease, box-shadow 0.25s ease, transform 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    color: var(--dk-text);
+}
+
+.dark-app .dk-glass-card:hover {
+    border-color: rgba(99, 102, 241, 0.25) !important;
+    box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.12), 0 12px 48px rgba(0, 0, 0, 0.5) !important;
+}
+
+/* Generous default padding inside header / content / footer */
+.dark-app .dk-glass-card .dk-glass-card-header {
+    padding: 24px 28px 12px !important;
+}
+
+.dark-app .dk-glass-card .dk-glass-card-content {
+    padding: 12px 28px 24px !important;
+}
+
+.dark-app .dk-glass-card .dk-glass-card-footer {
+    padding: 12px 28px 24px !important;
+}
+
+.dark-app .dk-glass-card-title {
+    font-size: 1rem !important;
+    font-weight: 700 !important;
+    letter-spacing: -0.02em !important;
+    color: var(--dk-text) !important;
+}
+
+.dark-app .dk-glass-card-description {
+    font-size: 0.85rem !important;
+    color: var(--dk-text-muted) !important;
+    line-height: 1.6 !important;
+}
+
+/* ── Button: bigger, pill-shaped, gradient primary CTA ───────────────── */
+.dark-app .dk-glass-btn {
+    font-family: var(--dk-font) !important;
+    border-radius: 12px !important;
+    font-weight: 600 !important;
+    letter-spacing: -0.005em !important;
+    transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1) !important;
+    height: auto !important;
+}
+
+.dark-app .dk-glass-btn[data-size="default"] {
+    padding: 11px 22px !important;
+    font-size: 0.88rem !important;
+}
+
+.dark-app .dk-glass-btn[data-size="sm"] {
+    padding: 8px 16px !important;
+    font-size: 0.78rem !important;
+    border-radius: 10px !important;
+}
+
+.dark-app .dk-glass-btn[data-size="lg"] {
+    padding: 14px 28px !important;
+    font-size: 0.95rem !important;
+    border-radius: 14px !important;
+}
+
+.dark-app .dk-glass-btn[data-size="xl"] {
+    padding: 16px 32px !important;
+    font-size: 1rem !important;
+    border-radius: 14px !important;
+}
+
+.dark-app .dk-glass-btn[data-size="icon"] {
+    padding: 0 !important;
+    width: 40px !important;
+    height: 40px !important;
+    border-radius: 10px !important;
+}
+
+/* Variant: gradient (primary CTA) */
+.dark-app .dk-glass-btn[data-variant="gradient"] {
+    background: linear-gradient(135deg, var(--dk-primary), var(--dk-accent)) !important;
+    color: #fff !important;
+    border: none !important;
+    box-shadow: 0 4px 24px rgba(99, 102, 241, 0.35) !important;
+}
+
+.dark-app .dk-glass-btn[data-variant="gradient"]:hover:not(:disabled) {
+    box-shadow: 0 8px 40px rgba(99, 102, 241, 0.5) !important;
+    transform: translateY(-1px);
+}
+
+/* Variant: default (solid primary) */
+.dark-app .dk-glass-btn[data-variant="default"] {
+    background: linear-gradient(135deg, var(--dk-primary), var(--dk-accent)) !important;
+    color: #fff !important;
+    border: none !important;
+    box-shadow: 0 4px 24px rgba(99, 102, 241, 0.30) !important;
+}
+
+.dark-app .dk-glass-btn[data-variant="default"]:hover:not(:disabled) {
+    box-shadow: 0 8px 40px rgba(99, 102, 241, 0.45) !important;
+    transform: translateY(-1px);
+}
+
+/* Variant: outline */
+.dark-app .dk-glass-btn[data-variant="outline"] {
+    background: rgba(255, 255, 255, 0.04) !important;
+    border: 1px solid rgba(255, 255, 255, 0.10) !important;
+    color: var(--dk-text) !important;
+    box-shadow: none !important;
+}
+
+.dark-app .dk-glass-btn[data-variant="outline"]:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.07) !important;
+    border-color: rgba(99, 102, 241, 0.35) !important;
+}
+
+/* Variant: secondary */
+.dark-app .dk-glass-btn[data-variant="secondary"] {
+    background: var(--dk-surface-2) !important;
+    border: 1px solid var(--dk-border) !important;
+    color: var(--dk-text) !important;
+    box-shadow: none !important;
+}
+
+.dark-app .dk-glass-btn[data-variant="secondary"]:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.10) !important;
+}
+
+/* Variant: ghost */
+.dark-app .dk-glass-btn[data-variant="ghost"] {
+    background: transparent !important;
+    color: var(--dk-text-muted) !important;
+    box-shadow: none !important;
+    border: none !important;
+}
+
+.dark-app .dk-glass-btn[data-variant="ghost"]:hover:not(:disabled) {
+    background: rgba(255, 255, 255, 0.04) !important;
+    color: var(--dk-text) !important;
+}
+
+/* Variant: destructive */
+.dark-app .dk-glass-btn[data-variant="destructive"] {
+    background: rgba(248, 113, 113, 0.12) !important;
+    color: var(--dk-red) !important;
+    border: 1px solid rgba(248, 113, 113, 0.30) !important;
+    box-shadow: none !important;
+}
+
+.dark-app .dk-glass-btn[data-variant="destructive"]:hover:not(:disabled) {
+    background: rgba(248, 113, 113, 0.20) !important;
+}
+
+/* Variant: link */
+.dark-app .dk-glass-btn[data-variant="link"] {
+    background: transparent !important;
+    box-shadow: none !important;
+    border: none !important;
+    color: var(--dk-primary-light) !important;
+    padding: 4px 6px !important;
+}
+
+/* ── Tabs: pill bar with subtle border ──────────────────────────────── */
+.dark-app .dk-glass-tabs-list {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.06) !important;
+    padding: 5px !important;
+    border-radius: 12px !important;
+    height: auto !important;
+    gap: 4px !important;
+}
+
+.dark-app .dk-glass-tabs-trigger {
+    padding: 9px 18px !important;
+    font-size: 0.82rem !important;
+    font-weight: 600 !important;
+    border-radius: 8px !important;
+    color: var(--dk-text-muted) !important;
+}
+
+.dark-app .dk-glass-tabs-trigger[data-state="active"] {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.20), rgba(168, 85, 247, 0.20)) !important;
+    color: #fff !important;
+    box-shadow: 0 4px 18px rgba(99, 102, 241, 0.18) !important;
+}
+
+/* ── Badge: soft pill, variant-aware colours ────────────────────────── */
+.dark-app .dk-glass-badge {
+    border-radius: 999px !important;
+    padding: 4px 10px !important;
+    font-size: 0.68rem !important;
+    font-weight: 700 !important;
+    text-transform: uppercase !important;
+    letter-spacing: 0.06em !important;
+    border: 1px solid transparent !important;
+}
+
+.dark-app .dk-glass-badge[data-variant="default"] {
+    background: rgba(99, 102, 241, 0.15) !important;
+    color: var(--dk-primary-light) !important;
+    border-color: rgba(99, 102, 241, 0.30) !important;
+}
+
+.dark-app .dk-glass-badge[data-variant="success"] {
+    background: rgba(16, 185, 129, 0.12) !important;
+    color: #6ee7b7 !important;
+    border-color: rgba(16, 185, 129, 0.30) !important;
+}
+
+.dark-app .dk-glass-badge[data-variant="warning"] {
+    background: rgba(245, 158, 11, 0.12) !important;
+    color: #fcd34d !important;
+    border-color: rgba(245, 158, 11, 0.30) !important;
+}
+
+.dark-app .dk-glass-badge[data-variant="destructive"] {
+    background: rgba(248, 113, 113, 0.12) !important;
+    color: #fca5a5 !important;
+    border-color: rgba(248, 113, 113, 0.30) !important;
+}
+
+.dark-app .dk-glass-badge[data-variant="outline"] {
+    background: rgba(255, 255, 255, 0.04) !important;
+    color: var(--dk-text-muted) !important;
+    border-color: rgba(255, 255, 255, 0.10) !important;
+}
+
+.dark-app .dk-glass-badge[data-variant="secondary"] {
+    background: rgba(255, 255, 255, 0.06) !important;
+    color: var(--dk-text-sub) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+}
+
+/* ── Inputs / Textareas: dark glass with focus glow ─────────────────── */
+.dark-app .dk-glass-input,
+.dark-app .dk-glass-textarea {
+    background: rgba(255, 255, 255, 0.03) !important;
+    border: 1px solid rgba(255, 255, 255, 0.08) !important;
+    color: var(--dk-text) !important;
+    border-radius: 12px !important;
+    padding: 11px 14px !important;
+    font-size: 0.88rem !important;
+    transition: border-color 0.2s, box-shadow 0.2s !important;
+    box-shadow: none !important;
+}
+
+.dark-app .dk-glass-input::placeholder,
+.dark-app .dk-glass-textarea::placeholder {
+    color: var(--dk-text-muted) !important;
+}
+
+.dark-app .dk-glass-input:focus-visible,
+.dark-app .dk-glass-textarea:focus-visible {
+    border-color: rgba(99, 102, 241, 0.50) !important;
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.15) !important;
+    outline: none !important;
+}
+
+/* ── Dialog: bigger radius, glass, generous padding ─────────────────── */
+.dark-app .dk-glass-dialog,
+.dk-glass-dialog {
+    background: rgba(10, 10, 20, 0.92) !important;
+    border: 1px solid rgba(255, 255, 255, 0.10) !important;
+    border-radius: 20px !important;
+    backdrop-filter: blur(28px) saturate(160%) !important;
+    -webkit-backdrop-filter: blur(28px) !important;
+    box-shadow: 0 0 0 1px rgba(99, 102, 241, 0.10),
+                0 30px 80px rgba(0, 0, 0, 0.6) !important;
+    padding: 28px !important;
+}
+
+/* ── Progress bar polish ────────────────────────────────────────────── */
+.dark-app [data-slot="progress-track"],
+.dark-app .progress-track {
+    background: rgba(255, 255, 255, 0.06) !important;
+    border-radius: 99px !important;
+}
+
+.dark-app .bg-primary {
+    background: linear-gradient(90deg, var(--dk-primary), var(--dk-accent));
+}
+
+/* ── Scrollbar polish for dashboard panes ───────────────────────────── */
+.dark-app *::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+}
+
+.dark-app *::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.dark-app *::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.08);
+    border-radius: 99px;
+}
+
+.dark-app *::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.15);
+}
+
+/* ── Article (LearningModuleDetail) — make markdown breathe ──────────── */
+.dark-app .prose {
+    color: var(--dk-text);
+}
+
+.dark-app .prose h1,
+.dark-app .prose h2,
+.dark-app .prose h3,
+.dark-app .prose h4 {
+    color: var(--dk-text);
+    letter-spacing: -0.025em;
+}
+
+.dark-app .prose h2 {
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    padding-bottom: 10px;
+    margin-top: 2.4em;
+}
+
+.dark-app .prose p,
+.dark-app .prose li {
+    color: rgba(241, 245, 249, 0.85);
+    line-height: 1.78;
+}
+
+.dark-app .prose strong {
+    color: var(--dk-text);
+}
+
+.dark-app .prose blockquote {
+    border-left: 3px solid var(--dk-primary);
+    background: rgba(99, 102, 241, 0.06);
+    border-radius: 0 12px 12px 0;
+    padding: 14px 20px;
+    color: rgba(241, 245, 249, 0.90);
+    font-style: normal;
+}
+
+.dark-app .prose code {
+    background: rgba(99, 102, 241, 0.12);
+    border: 1px solid rgba(99, 102, 241, 0.20);
+    color: var(--dk-primary-light);
+    padding: 2px 6px;
+    border-radius: 6px;
+    font-size: 0.85em;
+}
+
+.dark-app .prose pre {
+    background: #0a0a14 !important;
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 14px;
+    padding: 18px 22px;
+}
+
+.dark-app .prose pre code {
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: rgba(241, 245, 249, 0.92);
+}
+
+.dark-app .prose table {
+    border: 1px solid rgba(255, 255, 255, 0.10);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+.dark-app .prose thead {
+    background: rgba(99, 102, 241, 0.08);
+}
+
+.dark-app .prose th {
+    color: var(--dk-primary-light);
+    font-weight: 700;
+    text-transform: uppercase;
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    padding: 10px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.dark-app .prose td {
+    padding: 12px 16px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+    color: rgba(241, 245, 249, 0.88);
+}
+
+.dark-app .prose tbody tr:nth-child(even) {
+    background: rgba(255, 255, 255, 0.02);
+}
+
+/* ── DnD-kit topic columns (LearningPathBuilder) — softer accents ───── */
+.dark-app [class*="border-l-emerald-500"] {
+    border-left: 3px solid #10b981 !important;
+}
+
+.dark-app [class*="border-l-amber-500"] {
+    border-left: 3px solid #f59e0b !important;
+}

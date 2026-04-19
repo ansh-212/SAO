@@ -3,6 +3,7 @@ import { NavLink, Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../../context/AuthContext'
 import { useLang } from '../../context/LangContext'
 import { motion } from 'framer-motion'
+import RoleSwitcher from '../RoleSwitcher'
 
 /**
  * DarkSidebar — glassmorphic dark sidebar for authenticated dashboards.
@@ -131,6 +132,15 @@ export default function DarkSidebar() {
                         </div>
                     </div>
                 </div>
+
+                {/* Active-role switcher (students only). Lets a learner flip
+                    between every role they're currently preparing for, or add
+                    a new one without losing existing progress. */}
+                {user && user.role !== 'admin' && !isDemoMode && (
+                    <div style={{ marginTop: 12 }}>
+                        <RoleSwitcher />
+                    </div>
+                )}
             </div>
 
             {/* Navigation */}
@@ -139,13 +149,18 @@ export default function DarkSidebar() {
                     <>
                         <NavItem to="/admin/dashboard" end icon="📊" label={t('overview')} />
                         <NavItem to="/coding-skills" icon="💻" label="Coding Skills" />
-                        <NavItem to="/portfolio" icon="📋" label={t('assessments')} />
                         <NavItem to="/profile" icon="👤" label="Profile" />
                     </>
                 ) : (
                     <>
                         <NavItem to="/student/dashboard" end icon="🏠" label={t('dashboard')} />
+                        <NavItem to="/onboarding" icon="🧭" label="Onboarding" />
+                        <NavItem to="/onboarding/diagnostic" icon="🧪" label="Diagnostic" />
+                        <NavItem to="/onboarding/path" icon="🧩" label="Path Builder" />
+                        <NavItem to="/learn" icon="📚" label="Learning Hub" />
+                        <NavItem to="/plan" icon="🏢" label="Company Plan" />
                         <NavItem to="/interview" icon="🎙️" label="Interview Coach" />
+                        <NavItem to="/interviews" icon="🗂️" label="Interview History" />
                         <NavItem to="/tracks" icon="🛤️" label="Learning Tracks" />
                         <NavItem to="/remediation" icon="🩹" label="Remediation" />
                         <NavItem to="/demo/coding" icon="💻" label="Demo Challenge" />

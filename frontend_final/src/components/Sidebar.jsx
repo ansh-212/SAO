@@ -84,12 +84,17 @@ export default function Sidebar() {
           <>
             <NavItem to="/dashboard" icon="📊" label={t('overview')} />
             <NavItem to="/coding-skills" icon="💻" label="Coding Skills" />
-            <NavItem to="/portfolio" icon="📋" label={t('assessments')} />
             <NavItem to="/profile" icon="👤" label="Profile" />
           </>
         ) : (
           <>
             <NavItem to="/dashboard" icon="🏠" label={t('dashboard')} />
+            <NavItem to="/onboarding" icon="🧭" label="Onboarding" />
+            <NavItem to="/onboarding/diagnostic" icon="🧪" label="Diagnostic" />
+            <NavItem to="/onboarding/path" icon="🧩" label="Path Builder" />
+            <NavItem to="/learn" icon="📚" label="Learning Hub" />
+            <NavItem to="/plan" icon="🏢" label="Company Plan" />
+            <NavItem to="/interviews" icon="🗂️" label="Interview History" />
             <NavItem to="/portfolio" icon="🎓" label={t('portfolio')} />
             <NavItem to="/profile" icon="👤" label="Profile" />
           </>

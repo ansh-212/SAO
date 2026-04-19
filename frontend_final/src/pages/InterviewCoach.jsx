@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { useNavigate } from 'react-router-dom'
+import toast from 'react-hot-toast'
 import DarkLayout from '../components/layout/DarkLayout'
-import api from '../api/client'
+import api, { interviewSessionsApi } from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { DEMO_INTERVIEW_TOPICS } from '../data/demoData'
 import Proctor from '../components/Proctor'
@@ -113,7 +115,34 @@ export default function InterviewCoach() {
     const proctorRef = useRef(null)
     const [isListening, setIsListening] = useState(false)
     const recognitionRef = useRef(null)
-    const { isDemoMode } = useAuth()
+    const [savedSessionId, setSavedSessionId] = useState(null)
+    const [savingSession, setSavingSession] = useState(false)
+    const { isDemoMode, user } = useAuth()
+    const navigate = useNavigate()
+
+    const persistSession = async ({ evaluationData, transcript, behavioralStats }) => {
+        if (isDemoMode) return
+        setSavingSession(true)
+        try {
+            const topicLabel = topics.find((t) => t.id === selectedTopic)?.name || selectedTopic
+            const res = await interviewSessionsApi.create({
+                mode: 'studied_topics',
+                job_role: user?.target_role || '',
+                topic: selectedTopic,
+                topics_covered: [topicLabel],
+                transcript,
+                behavioral_stats: behavioralStats || undefined,
+                end_evaluation: evaluationData,
+            })
+            setSavedSessionId(res?.id)
+            toast.success('Interview saved to your history')
+        } catch (err) {
+            console.error('Failed to persist interview', err)
+            toast.error('Could not save this interview to history')
+        } finally {
+            setSavingSession(false)
+        }
+    }
 
     const speakText = (text) => {
         if (!window.speechSynthesis) return;
@@ -234,13 +263,19 @@ export default function InterviewCoach() {
                     behavioral_stats: behavioralStats
                 })
                 const closingMsg = res.data.closing_message || "Thank you for completing the interview!";
-                setMessages(prev => [
-                    ...prev,
+                const finalTranscript = [
+                    ...newMessages,
                     { role: 'interviewer', content: closingMsg },
-                ])
+                ]
+                setMessages(finalTranscript)
                 speakText(closingMsg);
                 setEvaluation(res.data)
                 setPhase('evaluation')
+                persistSession({
+                    evaluationData: res.data,
+                    transcript: finalTranscript,
+                    behavioralStats,
+                })
             } else {
                 const res = await api.post('/interview/respond', {
                     topic: selectedTopic, difficulty,
@@ -289,6 +324,8 @@ export default function InterviewCoach() {
         setMessages([])
         setEvaluation(null)
         setQuestionNum(0)
+        setSavedSessionId(null)
+        setSavingSession(false)
         if (window.speechSynthesis) window.speechSynthesis.cancel()
     }
 
@@ -496,9 +533,40 @@ export default function InterviewCoach() {
                         <p style={{ fontSize: '0.84rem', color: 'var(--dk-text-muted)', lineHeight: 1.7 }}>{evaluation.detailed_feedback}</p>
                     </div>
 
-                    <button onClick={resetInterview} className="dk-btn dk-btn-primary" style={{ width: '100%', justifyContent: 'center' }}>
-                        🔄 Start New Interview
-                    </button>
+                    <div style={{ display: 'flex', gap: 12 }}>
+                        <button
+                            onClick={resetInterview}
+                            className="dk-btn"
+                            style={{
+                                flex: 1, justifyContent: 'center',
+                                background: 'rgba(255,255,255,0.04)',
+                                border: '1px solid rgba(255,255,255,0.08)',
+                                color: 'var(--dk-text)',
+                            }}
+                        >
+                            🔄 Start New Interview
+                        </button>
+                        <button
+                            onClick={() => savedSessionId && navigate(`/interviews/${savedSessionId}`)}
+                            disabled={!savedSessionId || savingSession}
+                            className="dk-btn dk-btn-primary"
+                            style={{
+                                flex: 1,
+                                justifyContent: 'center',
+                                background: savedSessionId
+                                    ? 'linear-gradient(135deg, #6366f1, #a855f7)'
+                                    : 'rgba(99,102,241,0.18)',
+                                opacity: savedSessionId ? 1 : 0.7,
+                            }}
+                        >
+                            {savingSession ? 'Saving…' : '📊 View Full Report'}
+                        </button>
+                    </div>
+                    {!isDemoMode && !savedSessionId && !savingSession && (
+                        <p style={{ marginTop: 10, fontSize: '0.75rem', color: 'var(--dk-text-muted)', textAlign: 'center' }}>
+                            Saving may have failed — your interview history is updated automatically when it succeeds.
+                        </p>
+                    )}
                 </motion.div>
             </DarkLayout>
         )
@@ -528,7 +596,15 @@ export default function InterviewCoach() {
                                     api.post('/interview/end', {
                                         topic: selectedTopic, difficulty, history: messages, total_questions: totalQ,
                                         behavioral_stats: behavioralStats
-                                    }).then(r => { setEvaluation(r.data); setPhase('evaluation') })
+                                    }).then(r => {
+                                        setEvaluation(r.data)
+                                        setPhase('evaluation')
+                                        persistSession({
+                                            evaluationData: r.data,
+                                            transcript: messages,
+                                            behavioralStats,
+                                        })
+                                    })
                                         .catch(() => showDemoEvaluation())
                                         .finally(() => setLoading(false))
                                 }

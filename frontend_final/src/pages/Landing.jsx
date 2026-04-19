@@ -55,12 +55,14 @@ function WorkflowSection() {
             viewport={{ once: true }}
             transition={{ duration: 0.6, ease: easeOutExpo, delay: i * 0.1 }}
             style={{
-              background: 'var(--lp-surface)',
+              background: 'rgba(10, 10, 20, 0.42)',
               border: '1px solid var(--lp-border)',
               borderRadius: 20,
               padding: '32px 24px',
               position: 'relative',
               overflow: 'hidden',
+              backdropFilter: 'blur(14px) saturate(135%)',
+              WebkitBackdropFilter: 'blur(14px) saturate(135%)',
             }}
           >
             {/* Step number watermark */}

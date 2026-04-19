@@ -6,9 +6,13 @@ import {
   Filler, Tooltip, Legend, CategoryScale, LinearScale, BarElement,
 } from 'chart.js'
 import { Radar, Bar } from 'react-chartjs-2'
+import { Command as CommandIcon, BookOpen, Activity } from 'lucide-react'
 import DarkLayout from '../components/layout/DarkLayout'
 import JoinClassModal from '../components/dashboard/JoinClassModal'
 import ClassroomCard from '../components/dashboard/ClassroomCard'
+import LearnTab from '../components/dashboard/LearnTab'
+import CommandPalette from '../components/CommandPalette'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../components/ui/tabs'
 import api from '../api/client'
 import { useAuth } from '../context/AuthContext'
 import { useLang } from '../context/LangContext'
@@ -154,27 +158,35 @@ export default function StudentDashboard() {
     </DarkLayout>
   )
 
-  const radarData = {
-    labels: analytics?.skill_radar?.labels || ['Depth', 'Accuracy', 'Application', 'Originality'],
+  const hasRadarData = Array.isArray(analytics?.skill_radar?.labels)
+    && Array.isArray(analytics?.skill_radar?.scores)
+    && analytics.skill_radar.labels.length > 0
+    && analytics.skill_radar.scores.length > 0
+
+  const hasScoreHistory = Array.isArray(analytics?.score_history)
+    && analytics.score_history.length > 0
+
+  const radarData = hasRadarData ? {
+    labels: analytics.skill_radar.labels,
     datasets: [{
       label: 'Your Skills',
-      data: analytics?.skill_radar?.scores || [0, 0, 0, 0],
+      data: analytics.skill_radar.scores,
       backgroundColor: 'rgba(99,102,241,0.18)',
       borderColor: '#6366f1',
       pointBackgroundColor: '#6366f1',
       pointBorderColor: 'rgba(99,102,241,0.5)',
     }],
-  }
+  } : null
 
-  const barData = {
-    labels: (analytics?.score_history || []).map(s => s.date),
+  const barData = hasScoreHistory ? {
+    labels: analytics.score_history.map(s => s.date),
     datasets: [{
       label: 'Score %',
-      data: (analytics?.score_history || []).map(s => s.score),
+      data: analytics.score_history.map(s => s.score),
       backgroundColor: 'rgba(99,102,241,0.7)',
       borderRadius: 6,
     }],
-  }
+  } : null
 
   return (
     <DarkLayout>
@@ -187,20 +199,71 @@ export default function StudentDashboard() {
         )}
       </AnimatePresence>
 
+      <CommandPalette />
+
       {/* Page header */}
       <motion.div
-        style={{ marginBottom: 28 }}
+        style={{ marginBottom: 20, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}
         initial={{ opacity: 0, y: 16 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
       >
-        <h1 style={{ fontSize: 'clamp(1.4rem, 3vw, 1.9rem)', fontWeight: 800, color: 'var(--dk-text)', letterSpacing: '-0.04em', marginBottom: 6 }}>
-          👋 Welcome, {user?.name?.split(' ')[0]}!
-        </h1>
-        <p style={{ color: 'var(--dk-text-muted)', fontSize: '0.88rem' }}>
-          Here's your skill progress and available assessments.
-        </p>
+        <div>
+          <h1 style={{ fontSize: 'clamp(1.4rem, 3vw, 1.9rem)', fontWeight: 800, color: 'var(--dk-text)', letterSpacing: '-0.04em', marginBottom: 6 }}>
+            Welcome, {user?.name?.split(' ')[0] || 'there'}
+          </h1>
+          <p style={{ color: 'var(--dk-text-muted)', fontSize: '0.88rem' }}>
+            Track your roadmap, jump back into a topic, and review past mock interviews.
+          </p>
+        </div>
+        <button
+          type="button"
+          onClick={() => {
+            const ev = new KeyboardEvent('keydown', { key: 'k', metaKey: true, ctrlKey: true, bubbles: true })
+            document.dispatchEvent(ev)
+          }}
+          style={{
+            display: 'inline-flex', alignItems: 'center', gap: 8,
+            padding: '8px 14px', borderRadius: 10, cursor: 'pointer',
+            background: 'rgba(99,102,241,0.08)',
+            border: '1px solid rgba(99,102,241,0.25)',
+            color: 'var(--dk-text)', fontSize: '0.78rem', fontWeight: 500,
+          }}
+        >
+          <CommandIcon size={14} /> Search · <kbd style={{ fontFamily: 'inherit', padding: '1px 6px', borderRadius: 6, background: 'rgba(255,255,255,0.06)', border: '1px solid rgba(255,255,255,0.1)', fontSize: '0.7rem' }}>Ctrl K</kbd>
+        </button>
       </motion.div>
+
+      <Tabs defaultValue="learn" className="w-full">
+        <TabsList
+          className="mb-6"
+          style={{
+            background: 'rgba(255,255,255,0.03)',
+            border: '1px solid rgba(255,255,255,0.06)',
+            padding: 5, borderRadius: 12, gap: 4,
+          }}
+        >
+          <TabsTrigger
+            value="learn"
+            className="gap-2"
+            style={{ padding: '8px 18px', fontSize: '0.85rem', fontWeight: 600, borderRadius: 8 }}
+          >
+            <BookOpen className="h-4 w-4" /> Learn
+          </TabsTrigger>
+          <TabsTrigger
+            value="activity"
+            className="gap-2"
+            style={{ padding: '8px 18px', fontSize: '0.85rem', fontWeight: 600, borderRadius: 8 }}
+          >
+            <Activity className="h-4 w-4" /> Activity
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="learn">
+          <LearnTab user={user} dailyPlan={dailyPlan} />
+        </TabsContent>
+
+        <TabsContent value="activity">
 
       {/* Stats cards */}
       <div className="dk-stagger" style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: 16, marginBottom: 28 }}>
@@ -266,7 +329,7 @@ export default function StudentDashboard() {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 20, marginBottom: 28 }}>
         <div className="dk-card">
           <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--dk-text)', marginBottom: 20 }}>🎯 Skill Radar</h3>
-          {analytics?.total_submissions > 0 ? (
+          {hasRadarData && analytics?.total_submissions > 0 ? (
             <div style={{ maxWidth: 280, margin: '0 auto' }}>
               <Radar data={radarData} options={radarOptions} />
             </div>
@@ -280,7 +343,7 @@ export default function StudentDashboard() {
 
         <div className="dk-card">
           <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--dk-text)', marginBottom: 20 }}>📈 Score History</h3>
-          {analytics?.score_history?.length > 0 ? (
+          {hasScoreHistory ? (
             <div style={{ height: 190 }}>
               <Bar data={barData} options={barOptions} />
             </div>
@@ -464,7 +527,7 @@ export default function StudentDashboard() {
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
                 {leaderboard.entries.slice(0, 8).map(entry => {
-                  const isMe = entry.user_id === (user?.id || 'demo-student-001')
+                  const isMe = !!user?.id && entry.user_id === user.id
                   return (
                     <div
                       key={entry.rank}
@@ -628,6 +691,8 @@ export default function StudentDashboard() {
           </div>
         )}
       </div>
+        </TabsContent>
+      </Tabs>
     </DarkLayout>
   )
 }

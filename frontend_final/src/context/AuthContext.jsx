@@ -24,20 +24,16 @@ export function AuthProvider({ children }) {
         // Token expired — clear session
         localStorage.removeItem('sf_token')
         localStorage.removeItem('sf_user')
+        sessionStorage.removeItem('demo_user')
         setUser(null)
       }).finally(() => setLoading(false))
     } else {
-      // Check demo mode
-      const demoUser = sessionStorage.getItem('demo_user')
-      if (demoUser) {
-        setUser(JSON.parse(demoUser))
-        setIsDemoMode(true)
-      }
       setLoading(false)
     }
   }, [])
 
   const login = async (email, password) => {
+    sessionStorage.removeItem('demo_user')
     const res = await api.post('/auth/login', { email, password })
     const { access_token, user: userData } = res.data
     localStorage.setItem('sf_token', access_token)
@@ -48,6 +44,7 @@ export function AuthProvider({ children }) {
   }
 
   const register = async (email, name, password, role = 'student') => {
+    sessionStorage.removeItem('demo_user')
     const res = await api.post('/auth/register', { email, name, password, role })
     const { access_token, user: userData } = res.data
     localStorage.setItem('sf_token', access_token)
@@ -76,6 +73,8 @@ export function AuthProvider({ children }) {
   }
 
   const enterDemoMode = useCallback((role = 'student') => {
+    localStorage.removeItem('sf_token')
+    localStorage.removeItem('sf_user')
     const demoUser = role === 'admin' ? DEMO_USERS.admin : DEMO_USERS.student
     sessionStorage.setItem('demo_user', JSON.stringify(demoUser))
     setUser(demoUser)

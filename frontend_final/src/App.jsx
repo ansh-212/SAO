@@ -1,8 +1,9 @@
 import React from 'react'
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { LangProvider } from './context/LangContext'
 import ErrorBoundary from './components/ErrorBoundary'
+import { useOnboardingStatus } from './lib/queries'
 import './index.css'
 
 // Pages
@@ -20,6 +21,14 @@ import DemoCodingChallenge from './pages/DemoCodingChallenge'
 import InterviewCoach from './pages/InterviewCoach'
 import Tracks from './pages/Tracks'
 import RemediationHub from './pages/RemediationHub'
+import Onboarding from './pages/Onboarding'
+import LearningPathBuilder from './pages/LearningPathBuilder'
+import OnboardingDiagnostic from './pages/OnboardingDiagnostic'
+import LearningHub from './pages/LearningHub'
+import LearningModuleDetail from './pages/LearningModuleDetail'
+import PlanPersonalization from './pages/PlanPersonalization'
+import InterviewHistory from './pages/InterviewHistory'
+import InterviewReport from './pages/InterviewReport'
 
 /* ─── Loading Gate ───────────────────────────────────────────────────────── */
 function LoadingGate({ children }) {
@@ -54,13 +63,44 @@ function LoadingGate({ children }) {
 /**
  * ProtectedRoute — redirects to /login if unauthenticated.
  * If adminOnly is set, non-admin users get sent to their dashboard.
+ * If studentOnly is set, admin users get sent to admin dashboard.
  * Supports demo mode users.
  */
-function ProtectedRoute({ children, adminOnly = false }) {
+function ProtectedRoute({ children, adminOnly = false, studentOnly = false }) {
   const { user } = useAuth()
   if (!user) return <Navigate to="/login" replace />
   if (adminOnly && user.role !== 'admin') return <Navigate to="/student/dashboard" replace />
+  if (studentOnly && user.role === 'admin') return <Navigate to="/admin/dashboard" replace />
   return children
+}
+
+/**
+ * OnboardingGate — for student-only routes. New users (onboarding_complete === false)
+ * are redirected to /onboarding. Demo users always pass through.
+ */
+const ONBOARDING_PREFIX = ['/onboarding']
+function OnboardingGate({ children }) {
+  const { user, isDemoMode } = useAuth()
+  const location = useLocation()
+  const isStudent = !!user && user.role !== 'admin'
+  const onOnboardingRoute = ONBOARDING_PREFIX.some((p) => location.pathname.startsWith(p))
+  const enabled = isStudent && !isDemoMode && !onOnboardingRoute
+  const { data, isLoading } = useOnboardingStatus({ enabled, retry: false })
+
+  if (!enabled) return children
+  if (isLoading) return children
+  if (data && data.onboarding_complete === false) {
+    return <Navigate to="/onboarding" replace />
+  }
+  return children
+}
+
+function StudentRoute({ children }) {
+  return (
+    <ProtectedRoute studentOnly>
+      <OnboardingGate>{children}</OnboardingGate>
+    </ProtectedRoute>
+  )
 }
 
 /**
@@ -74,7 +114,7 @@ function RoleGate() {
 }
 
 function AppRoutes() {
-  const { user } = useAuth()
+  const { user, isDemoMode } = useAuth()
 
   return (
     <Routes>
@@ -82,11 +122,11 @@ function AppRoutes() {
       <Route path="/" element={<Landing />} />
       <Route
         path="/login"
-        element={user ? <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/student/dashboard'} /> : <Login />}
+        element={user && !isDemoMode ? <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/student/dashboard'} /> : <Login />}
       />
       <Route
         path="/register"
-        element={user ? <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/student/dashboard'} /> : <Register />}
+        element={user && !isDemoMode ? <Navigate to={user.role === 'admin' ? '/admin/dashboard' : '/student/dashboard'} /> : <Register />}
       />
 
       {/* Legacy /dashboard → role-based redirect */}
@@ -104,9 +144,9 @@ function AppRoutes() {
       <Route
         path="/student/dashboard"
         element={
-          <ProtectedRoute>
+          <StudentRoute>
             <StudentDashboard />
-          </ProtectedRoute>
+          </StudentRoute>
         }
       />
 
@@ -162,6 +202,72 @@ function AppRoutes() {
         }
       />
 
+      {/* Onboarding flow */}
+      <Route
+        path="/onboarding"
+        element={
+          <ProtectedRoute studentOnly>
+            <Onboarding />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/onboarding/path"
+        element={
+          <ProtectedRoute studentOnly>
+            <LearningPathBuilder />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/onboarding/diagnostic"
+        element={
+          <ProtectedRoute studentOnly>
+            <OnboardingDiagnostic />
+          </ProtectedRoute>
+        }
+      />
+      <Route
+        path="/learn"
+        element={
+          <StudentRoute>
+            <LearningHub />
+          </StudentRoute>
+        }
+      />
+      <Route
+        path="/learn/:topic"
+        element={
+          <StudentRoute>
+            <LearningModuleDetail />
+          </StudentRoute>
+        }
+      />
+      <Route
+        path="/plan"
+        element={
+          <StudentRoute>
+            <PlanPersonalization />
+          </StudentRoute>
+        }
+      />
+      <Route
+        path="/interviews"
+        element={
+          <StudentRoute>
+            <InterviewHistory />
+          </StudentRoute>
+        }
+      />
+      <Route
+        path="/interviews/:interviewId"
+        element={
+          <StudentRoute>
+            <InterviewReport />
+          </StudentRoute>
+        }
+      />
+
       {/* Shared protected routes */}
       <Route
         path="/assessment/:id"
@@ -173,7 +279,7 @@ function AppRoutes() {
       />
       <Route
         path="/portfolio"
-        element={<ProtectedRoute><Portfolio /></ProtectedRoute>}
+        element={<ProtectedRoute studentOnly><Portfolio /></ProtectedRoute>}
       />
       <Route
         path="/profile"

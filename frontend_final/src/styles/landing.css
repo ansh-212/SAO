@@ -390,11 +390,13 @@
 /* Card base */
 .lp-bento-card {
   position: relative;
-  background: var(--lp-surface);
+  background: rgba(10, 10, 20, 0.42);
   border: 1px solid var(--lp-border);
   border-radius: 20px;
   padding: 32px;
   overflow: hidden;
+  backdrop-filter: blur(14px) saturate(135%);
+  -webkit-backdrop-filter: blur(14px) saturate(135%);
   transition: border-color 0.3s ease, box-shadow 0.3s ease;
   box-shadow: var(--lp-shadow-card);
 }
@@ -581,10 +583,12 @@
 }
 
 .lp-terminal {
-  background: rgba(8, 8, 16, 0.9);
+  background: rgba(10, 10, 20, 0.52);
   border: 1px solid var(--lp-border);
   border-radius: 24px;
   overflow: hidden;
+  backdrop-filter: blur(14px) saturate(135%);
+  -webkit-backdrop-filter: blur(14px) saturate(135%);
   box-shadow: 0 0 0 1px rgba(255,255,255,0.04), 0 32px 80px rgba(0,0,0,0.6), 0 0 120px rgba(99,102,241,0.06);
 }
 
@@ -678,11 +682,13 @@
   gap: 16px;
 }
 .lp-result-card {
-  background: var(--lp-surface);
+  background: rgba(10, 10, 20, 0.42);
   border: 1px solid var(--lp-border);
   border-radius: 14px;
   padding: 20px;
   text-align: center;
+  backdrop-filter: blur(14px) saturate(135%);
+  -webkit-backdrop-filter: blur(14px) saturate(135%);
 }
 .lp-result-score {
   font-size: 2rem;
@@ -709,12 +715,14 @@
 .lp-cta-card {
   max-width: 720px;
   margin: 0 auto;
-  background: var(--lp-surface);
+  background: rgba(10, 10, 20, 0.42);
   border: 1px solid var(--lp-border);
   border-radius: 28px;
   padding: 72px 48px;
   position: relative;
   overflow: hidden;
+  backdrop-filter: blur(14px) saturate(135%);
+  -webkit-backdrop-filter: blur(14px) saturate(135%);
   box-shadow: var(--lp-shadow-card);
 }
 .lp-cta-card::before {

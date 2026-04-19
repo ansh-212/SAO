@@ -81,7 +81,7 @@ export default function HeroSection() {
                     transition={{ duration: 0.6, ease: easeOutExpo }}
                 >
                     <span className="lp-hero-badge-dot" />
-                    Built for AISSMS Hackathon 2026 — 100% Free &amp; Open Source
+                    Adaptive Interview Prep Platform
                 </motion.div>
 
                 {/* ── Headline row 1: static animated words ── */}

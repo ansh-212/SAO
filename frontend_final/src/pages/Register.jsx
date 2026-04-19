@@ -57,7 +57,14 @@ export default function Register() {
         navigate(user.role === 'admin' ? '/admin/dashboard' : '/student/dashboard')
       }, 600)
     } catch (err) {
-      setError(err?.response?.data?.detail || 'Registration failed. Email may already be in use.')
+      const backendMessage = err?.response?.data?.detail
+      if (backendMessage) {
+        setError(backendMessage)
+      } else if (err?.request) {
+        setError('Cannot reach server right now. Please start backend and try again.')
+      } else {
+        setError('Registration failed. Please try again.')
+      }
     } finally {
       setLoading(false)
     }
