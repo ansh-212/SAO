@@ -34,15 +34,15 @@ class StatusUpdateRequest(BaseModel):
     status: str   # not_started | in_progress | test_pending | completed
 
 
+class ChatMessage(BaseModel):
+    role: str       # 'user' or 'assistant'
+    content: str
+
+
 class PracticeQuestionsRequest(BaseModel):
     job_role: str = ""
     chat_messages: List[ChatMessage] = []  # last N turns for context
     num_questions: int = 5
-
-
-class ChatMessage(BaseModel):
-    role: str       # 'user' or 'assistant'
-    content: str
 
 
 class ChatRequest(BaseModel):

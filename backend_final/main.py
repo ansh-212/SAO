@@ -9,7 +9,7 @@ from database import create_tables
 from routes import auth_routes, pdf_routes, assessment_routes, submission_routes, certificate_routes, analytics_routes, user_routes, gamification_routes, interview_routes, planner_routes, track_routes, remediation_routes, classroom_routes, company_routes, learning_path_routes, onboarding_routes, topic_routes, diagnostic_routes, interview_session_routes
 
 # ─── Add SkillSync backend to Python path ────────────────────────────────────
-SKILLSYNC_BACKEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "skillsync-backend")
+SKILLSYNC_BACKEND_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "skillsync_coding")
 if os.path.isdir(SKILLSYNC_BACKEND_DIR):
     sys.path.insert(0, SKILLSYNC_BACKEND_DIR)
 
@@ -17,7 +17,7 @@ if os.path.isdir(SKILLSYNC_BACKEND_DIR):
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    print(f"🚀 Starting {settings.APP_NAME} v{settings.APP_VERSION}")
+    print(f"[START] Starting {settings.APP_NAME} v{settings.APP_VERSION}")
     create_tables()
     os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
     os.makedirs(settings.CERT_DIR, exist_ok=True)
@@ -28,21 +28,21 @@ async def lifespan(app: FastAPI):
         from models import User
         db = SessionLocal()
         if db.query(User).count() == 0:
-            print("📦 Seeding demo data...")
+            print("[INFO] Seeding demo data...")
             import seed_data
             seed_data.seed(db)
-            print("✅ Demo data seeded!")
+            print("[OK] Demo data seeded!")
         db.close()
     except Exception as e:
-        print(f"⚠️  Seed failed (non-critical): {e}")
+        print(f"[WARN] Seed failed (non-critical): {e}")
 
     if not settings.GEMINI_API_KEY:
-        print("⚠️  GEMINI_API_KEY not set — AI features will use fallback mode")
+        print("[WARN] GEMINI_API_KEY not set - AI features will use fallback mode")
     else:
-        print(f"✅ Gemini AI configured ({settings.GEMINI_MODEL})")
+        print(f"[OK] Gemini AI configured ({settings.GEMINI_MODEL})")
 
     yield
-    print("👋 Shutting down InterviewVault")
+    print("[STOP] Shutting down InterviewVault")
 
 
 app = FastAPI(
@@ -110,12 +110,12 @@ try:
         skillsync_app = skillsync_mod.app
         app.router.include_router(skillsync_app.router, prefix="/api/coding")
         route_count = len([r for r in skillsync_app.routes if isinstance(r, APIRoute)])
-        print(f"✅ SkillSync coding backend mounted at /api/coding ({route_count} routes)")
+        print(f"[OK] SkillSync coding backend mounted at /api/coding ({route_count} routes)")
     else:
-        print(f"⚠️  SkillSync main.py not found at {skillsync_main_path}")
+        print(f"[WARN] SkillSync main.py not found at {skillsync_main_path}")
 except Exception as e:
     import traceback
-    print(f"⚠️  SkillSync coding backend not mounted: {e}")
+    print(f"[WARN] SkillSync coding backend not mounted: {e}")
     traceback.print_exc()
 
 
@@ -126,7 +126,7 @@ def root():
         "version": settings.APP_VERSION,
         "status": "running",
         "docs": "/docs",
-        "message": "AI-Driven Skill Assessment Platform 🧠⚡"
+        "message": "AI-Driven Skill Assessment Platform"
     }
 
 
