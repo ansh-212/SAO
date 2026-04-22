@@ -8,8 +8,14 @@ from dotenv import load_dotenv
 import subprocess
 import tempfile
 import sys
-from google import genai
-from google.genai import types
+try:
+    from google import genai
+    from google.genai import types
+    USE_NEW_GENAI_SDK = True
+except ImportError:
+    import google.generativeai as genai
+    types = None
+    USE_NEW_GENAI_SDK = False
 import json
 import traceback as _traceback
 import ast
@@ -23,6 +29,47 @@ from originality_engine import analyze_originality, analyze_batch_originality
 load_dotenv()
 
 app = FastAPI(title="OmniParse AI - Intelligent Document Processing Engine")
+
+DEFAULT_GEMINI_MODEL = "gemini-2.5-flash"
+
+
+def get_gemini_client(api_key: str):
+    """Create a Gemini client that works with both old and new Google SDKs."""
+    if USE_NEW_GENAI_SDK:
+        return genai.Client(api_key=api_key)
+    genai.configure(api_key=api_key)
+    return genai.GenerativeModel(DEFAULT_GEMINI_MODEL)
+
+
+def generate_gemini_json_text(client, prompt: str, model: str = DEFAULT_GEMINI_MODEL) -> str:
+    """Generate JSON text from Gemini across SDK variants."""
+    if USE_NEW_GENAI_SDK:
+        response = client.models.generate_content(
+            model=model,
+            contents=prompt,
+            config=types.GenerateContentConfig(response_mime_type="application/json")
+        )
+    else:
+        response = client.generate_content(
+            prompt,
+            generation_config={"response_mime_type": "application/json"}
+        )
+
+    text = getattr(response, "text", None)
+    if text:
+        return text
+
+    # Fallback extraction for older SDK response shapes.
+    candidates = getattr(response, "candidates", None) or []
+    chunks = []
+    for candidate in candidates:
+        content = getattr(candidate, "content", None)
+        parts = getattr(content, "parts", None) or []
+        for part in parts:
+            part_text = getattr(part, "text", None)
+            if part_text:
+                chunks.append(part_text)
+    return "\n".join(chunks).strip()
 
 # ============================================================
 # JSON SANITIZATION HELPER
@@ -744,7 +791,7 @@ async def evaluate_submission(payload: SubmissionPayload):
         }
 
     # --- 4. INITIALIZE GOOGLE GENAI CLIENT ---
-    client = genai.Client(api_key=api_key)
+    client = get_gemini_client(api_key)
 
     # --- 5. BUILD THE ORIGINALITY/PENALIZATION BLOCK FOR LLM ---
     originality_instruction = f"""
@@ -825,15 +872,7 @@ async def evaluate_submission(payload: SubmissionPayload):
     """
 
     try:
-        # Use new google.genai client API
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json"
-            )
-        )
-        raw_text = response.text.strip()
+        raw_text = generate_gemini_json_text(client, prompt).strip()
 
         # Aggressive Markdown Stripping (The Hackathon Safety Net)
         if raw_text.startswith("```json"):
@@ -900,7 +939,7 @@ async def evaluate_submission(payload: SubmissionPayload):
 
     except Exception as e:
         print(f"AI Parsing Error: {e}")
-        print(f"Raw AI Output was: {response.text if 'response' in locals() else 'No response'}")
+        print(f"Raw AI Output was: {raw_text if 'raw_text' in locals() else 'No response'}")
 
         # The Demo Fallback
         return {
@@ -955,7 +994,7 @@ async def batch_evaluate(payload: BatchEvalPayload):
         }
 
     # --- 3. BUILD HOLISTIC PROMPT ---
-    client = genai.Client(api_key=api_key)
+    client = get_gemini_client(api_key)
 
     # Compose telemetry for all questions
     questions_telemetry = ""
@@ -1044,14 +1083,7 @@ async def batch_evaluate(payload: BatchEvalPayload):
     """
 
     try:
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json"
-            )
-        )
-        raw_text = response.text.strip()
+        raw_text = generate_gemini_json_text(client, prompt).strip()
 
         # Markdown stripping
         if raw_text.startswith("```json"):
@@ -1191,7 +1223,7 @@ def analyze_with_gemini(text_content: str, source_type: str) -> dict:
 
     try:
         # Initialize the new google.genai client
-        client = genai.Client(api_key=api_key)
+        client = get_gemini_client(api_key)
 
         prompt = f"""
     You are an expert LeetCode problem setter and Senior Staff Engineer. Read the following excerpt and create a highly specific, production-grade Python coding challenge based on the concepts taught.
@@ -1935,15 +1967,7 @@ def analyze_with_gemini(text_content: str, source_type: str) -> dict:
         the data structure, NOT by lazy approximation
     """
 
-        # Use new google.genai client API
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json"
-            )
-        )
-        raw_text = response.text.strip()
+        raw_text = generate_gemini_json_text(client, prompt).strip()
         print(f"Gemini Response Length: {len(raw_text)} chars")
         print(f"First 500 chars of response: {raw_text[:500]}")
 
@@ -2026,7 +2050,7 @@ def generate_batch_assessment(text_content: str, source_type: str) -> dict:
     print(f"API Key found (starts with: {api_key[:10]}...)")
 
     try:
-        client = genai.Client(api_key=api_key)
+        client = get_gemini_client(api_key)
 
         prompt = f"""
     You are an expert Technical Interview Designer and LeetCode Problem Setter. 
@@ -2352,14 +2376,7 @@ def generate_batch_assessment(text_content: str, source_type: str) -> dict:
     [ ] No contradictory test cases (same input -> different expected)
     """
 
-        response = client.models.generate_content(
-            model="gemini-2.5-flash",
-            contents=prompt,
-            config=types.GenerateContentConfig(
-                response_mime_type="application/json"
-            )
-        )
-        raw_text = response.text.strip()
+        raw_text = generate_gemini_json_text(client, prompt).strip()
         print(f"Batch Response Length: {len(raw_text)} chars")
 
         # Clean markdown formatting

@@ -225,6 +225,60 @@ DEMO_ASSESSMENTS = [
                 }
             }
         ]
+    },
+    {
+        "title": "System Design Writeout Drill",
+        "description": "Practice questions where you explain architecture and command workflows using handwritten notes or diagrams.",
+        "difficulty": "intermediate",
+        "category": "Interview Practice",
+        "time_limit_minutes": 20,
+        "language": "en",
+        "tags": ["diagram", "formula", "workflow"],
+        "thumbnail_emoji": "📝",
+        "questions": [
+            {
+                "id": 1,
+                "text": "Draw a flow diagram showing request flow from client to API gateway, service layer, cache, and database. Label each step.",
+                "type": "whiteboard_capture",
+                "bloom_level": "analyze",
+                "section_reference": "System Design Basics",
+                "max_score": 10,
+                "rubric": {
+                    "depth": "Includes all key components and interactions",
+                    "accuracy": "Correct sequence and technical labels",
+                    "application": "Relates to real backend request lifecycle",
+                    "originality": "Clear and structured visual presentation"
+                }
+            },
+            {
+                "id": 2,
+                "text": "On paper, write the command sequence to create a Python virtual environment, activate it, install requirements, and run the server.",
+                "type": "commands",
+                "bloom_level": "apply",
+                "section_reference": "Development Workflow",
+                "max_score": 10,
+                "rubric": {
+                    "depth": "Includes complete setup steps",
+                    "accuracy": "Commands are syntactically valid",
+                    "application": "Order of commands is practical",
+                    "originality": "Provides useful context or alternatives"
+                }
+            },
+            {
+                "id": 3,
+                "text": "Explain the trade-offs of your design decisions and mention one optimization you would add for scale.",
+                "type": "open_ended",
+                "bloom_level": "evaluate",
+                "section_reference": "Architecture Trade-offs",
+                "max_score": 10,
+                "rubric": {
+                    "depth": "Analyzes at least two trade-offs",
+                    "accuracy": "Reasoning is technically correct",
+                    "application": "Connects to practical scaling needs",
+                    "originality": "Shows thoughtful improvement ideas"
+                }
+            }
+        ]
     }
 ]
 

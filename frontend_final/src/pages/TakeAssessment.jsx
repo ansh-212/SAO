@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react'
+import React, { useState, useEffect, useRef } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useLang } from '../context/LangContext'
@@ -6,6 +6,33 @@ import Proctor from '../components/Proctor'
 import ProctorStats from '../components/ProctorStats'
 import DarkLayout from '../components/layout/DarkLayout'
 import api from '../api/client'
+
+const CAPTURE_PATTERN = /(draw|diagram|flow\s?chart|figure|sketch|illustrate|white\s?paper|whiteboard|write the steps|write steps|commands?|command sequence|workflow|architecture|block diagram|process flow|formula)/i
+
+function questionNeedsCapture(question) {
+  if (!question) return false
+  if (question.capture_required) return true
+  const type = (question.type || '').toLowerCase()
+  if (['whiteboard', 'whiteboard_capture', 'diagram', 'diagram_capture', 'flowchart', 'commands', 'steps', 'capture', 'visual'].includes(type)) {
+    return true
+  }
+  return CAPTURE_PATTERN.test(question.text || '')
+}
+
+function getCaptureModeLabel(question) {
+  const mode = (question?.capture_mode || question?.type || 'capture').toLowerCase()
+  if (mode.includes('command')) return 'Commands'
+  if (mode.includes('step')) return 'Steps'
+  if (mode.includes('diagram') || mode.includes('flow')) return 'Diagram'
+  return 'Written'
+}
+
+function isQuestionAnswered(question, index, answers, captureStatusByQuestion) {
+  const hasText = !!answers[index]?.trim()
+  const capture = captureStatusByQuestion[String(index)]
+  const hasCapture = ['processing', 'completed'].includes(capture?.status)
+  return questionNeedsCapture(question) ? (hasText || hasCapture) : hasText
+}
 
 /* ─── Evaluate Loading Skeleton ─────────────────────────────────────────── */
 const EVAL_STEPS = [
@@ -81,6 +108,12 @@ export default function TakeAssessment() {
   const [loadingFollowup, setLoadingFollowup] = useState(false)
   const [showFollowup, setShowFollowup] = useState(null)
   const [toast, setToast] = useState(null)
+  const [captureStatusByQuestion, setCaptureStatusByQuestion] = useState({})
+  const [capturePanelFor, setCapturePanelFor] = useState(null)
+  const [captureFile, setCaptureFile] = useState(null)
+  const [captureBusy, setCaptureBusy] = useState(false)
+  const [captureNote, setCaptureNote] = useState('')
+  const captureFileRef = useRef(null)
 
   // Anti-cheat
   const [tabSwitches, setTabSwitches] = useState(0)
@@ -108,6 +141,16 @@ export default function TakeAssessment() {
       setAssessment(r.data)
       setTimeLeft(r.data.time_limit_minutes * 60)
     }).catch(() => navigate('/dashboard'))
+  }, [id])
+
+  useEffect(() => {
+    api.get(`/assessments/${id}/captures/me`).then((res) => {
+      const next = {}
+      res.data.forEach((item) => {
+        next[String(item.question_index)] = item
+      })
+      setCaptureStatusByQuestion(next)
+    }).catch(() => {})
   }, [id])
 
   // Timer
@@ -140,6 +183,23 @@ export default function TakeAssessment() {
       if (proctorRef.current) proctorRef.current.stop()
     }
   }, [])
+
+  useEffect(() => {
+    const hasProcessing = Object.values(captureStatusByQuestion).some(item => item?.status === 'processing')
+    if (!hasProcessing) return
+
+    const timer = setInterval(() => {
+      api.get(`/assessments/${id}/captures/me`).then((res) => {
+        const next = {}
+        res.data.forEach((item) => {
+          next[String(item.question_index)] = item
+        })
+        setCaptureStatusByQuestion(next)
+      }).catch(() => {})
+    }, 3500)
+
+    return () => clearInterval(timer)
+  }, [captureStatusByQuestion, id])
 
   const formatTime = (s) => `${Math.floor(s / 60)}:${(s % 60).toString().padStart(2, '0')}`
 
@@ -257,6 +317,62 @@ export default function TakeAssessment() {
     setAnswers(prev => ({ ...prev, [currentQ]: (prev[currentQ] || '') + '\n' + text }))
   }
 
+  const openCapturePanel = (questionIndex) => {
+    setCaptureFile(null)
+    setCaptureNote(answers[questionIndex] || '')
+    setCapturePanelFor(questionIndex)
+  }
+
+  const closeCapturePanel = () => {
+    setCapturePanelFor(null)
+    setCaptureFile(null)
+  }
+
+  const handleCaptureUpload = async (questionIndex) => {
+    if (!captureFile) {
+      setToast({ message: 'Please choose an image before uploading.', type: 'error' })
+      return
+    }
+
+    setCaptureBusy(true)
+    setCaptureStatusByQuestion(prev => ({
+      ...prev,
+      [String(questionIndex)]: { ...(prev[String(questionIndex)] || {}), status: 'uploading' }
+    }))
+
+    try {
+      const formData = new FormData()
+      formData.append('capture_file', captureFile)
+      formData.append('typed_context', captureNote || answers[questionIndex] || '')
+      formData.append('device_label', 'Uploaded image')
+
+      const res = await api.post(`/assessments/${id}/questions/${questionIndex}/capture`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      })
+
+      setCaptureStatusByQuestion(prev => ({
+        ...prev,
+        [String(questionIndex)]: {
+          ...(prev[String(questionIndex)] || {}),
+          capture_id: res.data.capture_id,
+          question_index: questionIndex,
+          status: 'processing',
+          analysis_summary: 'Image uploaded. Analysis is running in the background.',
+        }
+      }))
+      setToast({ message: 'Image uploaded successfully. Analysis started.', type: 'success' })
+      closeCapturePanel()
+    } catch (err) {
+      setToast({ message: err?.response?.data?.detail || 'Image upload failed.', type: 'error' })
+      setCaptureStatusByQuestion(prev => ({
+        ...prev,
+        [String(questionIndex)]: { ...(prev[String(questionIndex)] || {}), status: 'failed' }
+      }))
+    } finally {
+      setCaptureBusy(false)
+    }
+  }
+
   // ─── Follow-up Questions ──────────────────────────────────────────────────
   const requestFollowup = async (qIndex) => {
     const answer = answers[qIndex]
@@ -309,10 +425,18 @@ export default function TakeAssessment() {
       }
     })
 
+    const visualCaptureIds = {}
+    Object.entries(captureStatusByQuestion).forEach(([qIndex, item]) => {
+      if (item?.capture_id && ['processing', 'completed'].includes(item.status)) {
+        visualCaptureIds[qIndex] = item.capture_id
+      }
+    })
+
     try {
       const res = await api.post('/submissions', {
         assessment_id: parseInt(id),
         answers: finalAnswers,
+        visual_capture_ids: visualCaptureIds,
         time_taken_seconds: assessment.time_limit_minutes * 60 - timeLeft,
         anticheat_flags: {
           tab_switches: tabSwitches,
@@ -340,7 +464,7 @@ export default function TakeAssessment() {
 
   const questions = assessment.questions || []
   const q = questions[currentQ]
-  const progress = Object.keys(answers).filter(k => answers[k]?.trim()).length
+  const progress = questions.filter((question, index) => isQuestionAnswered(question, index, answers, captureStatusByQuestion)).length
 
   return (
     <DarkLayout>
@@ -398,9 +522,9 @@ export default function TakeAssessment() {
                     width: 36, height: 36, borderRadius: 10, border: '1px solid',
                     cursor: 'pointer', fontWeight: 600, fontSize: 13,
                     transition: 'all 0.2s ease',
-                    background: i === currentQ ? 'rgba(99,102,241,0.2)' : answers[i]?.trim() ? 'rgba(74,222,128,0.15)' : 'var(--dk-surface-2)',
-                    color: i === currentQ ? 'var(--dk-primary-light)' : answers[i]?.trim() ? 'var(--dk-green)' : 'var(--dk-text-muted)',
-                    borderColor: i === currentQ ? 'rgba(99,102,241,0.4)' : answers[i]?.trim() ? 'rgba(74,222,128,0.3)' : 'var(--dk-border)',
+                    background: i === currentQ ? 'rgba(99,102,241,0.2)' : isQuestionAnswered(questions[i], i, answers, captureStatusByQuestion) ? 'rgba(74,222,128,0.15)' : 'var(--dk-surface-2)',
+                    color: i === currentQ ? 'var(--dk-primary-light)' : isQuestionAnswered(questions[i], i, answers, captureStatusByQuestion) ? 'var(--dk-green)' : 'var(--dk-text-muted)',
+                    borderColor: i === currentQ ? 'rgba(99,102,241,0.4)' : isQuestionAnswered(questions[i], i, answers, captureStatusByQuestion) ? 'rgba(74,222,128,0.3)' : 'var(--dk-border)',
                   }}>{i + 1}</button>
               ))}
             </div>
@@ -426,6 +550,29 @@ export default function TakeAssessment() {
                 <p style={{ fontSize: 13, color: 'var(--dk-text-muted)', marginBottom: 16 }}>
                   Reference: {q.section_reference}
                 </p>
+              )}
+
+              {questionNeedsCapture(q) && (
+                <div style={{ marginBottom: 14, borderRadius: 10, padding: '10px 12px', border: '1px solid rgba(34,211,238,0.28)', background: 'rgba(34,211,238,0.08)', display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 600, color: 'var(--dk-cyan)' }}>
+                      This question expects a {getCaptureModeLabel(q).toLowerCase()} response.
+                    </div>
+                    <div style={{ fontSize: 12, color: 'var(--dk-text-muted)' }}>
+                      Upload an image of your written page before submitting.
+                    </div>
+                  </div>
+                  <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                    {captureStatusByQuestion[String(currentQ)]?.status && (
+                      <span className="badge" style={{ fontSize: 11 }}>
+                        {captureStatusByQuestion[String(currentQ)]?.status}
+                      </span>
+                    )}
+                    <button className="dk-btn dk-btn-ghost dk-btn-sm" onClick={() => openCapturePanel(currentQ)}>
+                      Upload Written Image
+                    </button>
+                  </div>
+                </div>
               )}
 
               <textarea
@@ -582,6 +729,62 @@ export default function TakeAssessment() {
           )}
         </div>
       </div>
+
+      <AnimatePresence>
+        {capturePanelFor !== null && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            style={{
+              position: 'fixed', inset: 0, zIndex: 90,
+              background: 'rgba(2,6,23,0.66)', backdropFilter: 'blur(4px)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
+            }}
+            onClick={closeCapturePanel}
+          >
+            <motion.div
+              initial={{ opacity: 0, y: 12, scale: 0.98 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 10, scale: 0.98 }}
+              transition={{ duration: 0.2 }}
+              className="dk-card"
+              style={{ width: 'min(560px, 100%)' }}
+              onClick={(e) => e.stopPropagation()}
+            >
+              <h3 style={{ marginTop: 0, marginBottom: 8, color: 'var(--dk-text)' }}>Upload your written response</h3>
+              <p style={{ marginTop: 0, marginBottom: 14, color: 'var(--dk-text-muted)', fontSize: 13 }}>
+                Take a clear photo of your page and upload it for analysis.
+              </p>
+
+              <input
+                ref={captureFileRef}
+                type="file"
+                accept="image/*"
+                onChange={(e) => setCaptureFile(e.target.files?.[0] || null)}
+                className="dk-input"
+                style={{ marginBottom: 12 }}
+              />
+
+              <textarea
+                value={captureNote}
+                onChange={(e) => setCaptureNote(e.target.value)}
+                placeholder="Optional: add a short typed note for context"
+                rows={4}
+                className="dk-input"
+                style={{ resize: 'vertical', marginBottom: 14 }}
+              />
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                <button className="dk-btn dk-btn-ghost" onClick={closeCapturePanel} disabled={captureBusy}>Cancel</button>
+                <button className="dk-btn dk-btn-primary" onClick={() => handleCaptureUpload(capturePanelFor)} disabled={captureBusy || !captureFile}>
+                  {captureBusy ? 'Uploading...' : 'Upload & Analyze'}
+                </button>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </DarkLayout>
   )
 }

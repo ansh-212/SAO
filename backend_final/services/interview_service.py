@@ -2,6 +2,7 @@
 InterviewVault — AI Interview Coach Service
 Multi-turn conversational mock interviews powered by Gemini.
 """
+import re
 from typing import List, Dict, Any, Optional
 from services.ai_service import _generate, _safe_parse_json
 
@@ -23,10 +24,56 @@ INTERVIEW_TOPICS = [
 ]
 
 
+WRITTEN_TRIGGER_PATTERN = re.compile(
+    r"(draw|diagram|flow\s?chart|figure|sketch|illustrate|white\s?paper|whiteboard|write\s+the\s+steps|write\s+steps|commands?|command\s+sequence|workflow|architecture|block\s+diagram|process\s+flow|formula)",
+    re.IGNORECASE,
+)
+
+
+def _force_written_prompt(question_text: str, topic_name: str) -> str:
+    """Guarantee the question contains write/draw keywords for capture testing."""
+    text = (question_text or "").strip()
+    if WRITTEN_TRIGGER_PATTERN.search(text):
+        return text
+    return (
+        f"On paper, write the steps to solve a core {topic_name} problem and draw a simple "
+        "workflow/diagram for your approach. Then explain your reasoning."
+    )
+
+
+def _force_standard_prompt(question_text: str, topic_name: str, question_number: int = 1) -> str:
+    """Guarantee the question remains a regular non-capture interview prompt."""
+    text = (question_text or "").strip()
+    if text and not WRITTEN_TRIGGER_PATTERN.search(text):
+        return text
+    if question_number <= 1:
+        return (
+            f"Can you explain the fundamental concepts of {topic_name} and how they apply "
+            "in real-world software engineering?"
+        )
+    return (
+        f"Question {question_number}: Building on your previous answer, explain a more advanced "
+        f"aspect of {topic_name}, including trade-offs and real-world edge cases."
+    )
+
+
+def _written_question_slots(total_questions: int) -> set:
+    """Pick a few question numbers that should require written/diagram responses."""
+    total = max(1, int(total_questions or 1))
+    if total <= 3:
+        slots = {2}
+    elif total <= 6:
+        slots = {2, 4}
+    else:
+        slots = {2, 5, 8}
+    return {n for n in slots if 1 <= n <= total}
+
+
 def start_interview(topic: str, difficulty: str = "intermediate", num_questions: int = 5) -> Optional[Dict[str, Any]]:
     """Generate an interview plan and opening question."""
     topic_info = next((t for t in INTERVIEW_TOPICS if t["id"] == topic), None)
     topic_name = topic_info["name"] if topic_info else topic
+    written_slots = sorted(_written_question_slots(num_questions))
 
     prompt = f"""You are an expert technical interviewer at a top tech company (Google/Meta level).
 You are conducting a {difficulty} difficulty interview on the topic: {topic_name}.
@@ -38,6 +85,8 @@ INTERVIEWER PERSONA:
 - Ask ONE clear question at a time
 - Start with a warm greeting and brief context
 - Your first question should be {difficulty} difficulty
+- The first question must be a normal conceptual question (no draw/write-steps wording).
+- Only question numbers in {written_slots} should be written/diagram style prompts.
 
 Respond with JSON:
 {{
@@ -57,12 +106,13 @@ Respond with JSON:
             result.setdefault("greeting", f"Welcome! I'll be your interviewer today. We'll cover {topic_name} with {num_questions} questions.")
             result.setdefault("question_number", 1)
             result.setdefault("total_questions", num_questions)
+            result["first_question"] = _force_standard_prompt(result.get("first_question", ""), topic_name, 1)
             return result
 
     # Fallback
     return {
         "greeting": f"Hi there! Welcome to your {topic_name} interview. I'll ask you {num_questions} questions at {difficulty} difficulty. Take your time and think through each answer. Let's begin!",
-        "first_question": f"Can you explain the fundamental concepts of {topic_name} and how they apply in real-world software engineering?",
+        "first_question": _force_standard_prompt("", topic_name, 1),
         "question_number": 1,
         "total_questions": num_questions,
         "difficulty": difficulty,
@@ -81,6 +131,8 @@ def continue_interview(
     behavioral_stats: Optional[Dict[str, Any]] = None
 ) -> Optional[Dict[str, Any]]:
     """Generate the next interview question based on conversation history."""
+    written_slots = sorted(_written_question_slots(total_questions))
+    should_be_written = question_number in written_slots
 
     # Build conversation context
     conv_text = ""
@@ -106,6 +158,8 @@ YOUR TASK:
 2. If this is NOT the last question, ask the NEXT question that builds on or relates to their response
 3. Adapt difficulty: if they struggled, make next question slightly easier; if they aced it, make it harder
 4. Keep the conversation natural and flowing
+5. Only question numbers in {written_slots} should be written/diagram style prompts.
+6. This question number is {question_number}; it should be {"written/diagram" if should_be_written else "normal conceptual"}.
 
 {"This is the LAST question. Make it a challenging wrap-up question." if question_number >= total_questions else ""}
 
@@ -124,11 +178,21 @@ Respond with JSON:
         if isinstance(result, dict) and result.get("next_question"):
             result.setdefault("question_number", question_number)
             result.setdefault("performance_signal", "moderate")
+            if should_be_written:
+                result["next_question"] = _force_written_prompt(result.get("next_question", ""), topic)
+            else:
+                result["next_question"] = _force_standard_prompt(result.get("next_question", ""), topic, question_number)
             return result
+
+    fallback_next_question = (
+        _force_written_prompt("", topic)
+        if should_be_written
+        else _force_standard_prompt("", topic, question_number)
+    )
 
     return {
         "acknowledgment": "Thank you for that response. Let's move on.",
-        "next_question": f"Building on what we discussed, can you tell me about a more advanced aspect of {topic}?",
+        "next_question": fallback_next_question,
         "question_number": question_number,
         "performance_signal": "moderate",
         "hints": ["Think about edge cases and real-world scenarios."],
