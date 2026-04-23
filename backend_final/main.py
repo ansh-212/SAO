@@ -134,3 +134,14 @@ def root():
 def health():
     return {"status": "healthy", "ai_enabled": bool(settings.GEMINI_API_KEY)}
 
+
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run(
+        app,
+        host="0.0.0.0",
+        port=8000,
+        reload=False,
+    )
+

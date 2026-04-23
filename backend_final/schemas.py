@@ -119,6 +119,7 @@ class AssessmentResponse(BaseModel):
 class SubmissionCreate(BaseModel):
     assessment_id: int
     answers: Dict[str, str]  # {question_index: answer_text}
+    visual_capture_ids: Optional[Dict[str, int]] = {}
     time_taken_seconds: int = 0
     anticheat_flags: Optional[Dict[str, Any]] = {}
     proctoring_data: Optional[Dict[str, Any]] = None

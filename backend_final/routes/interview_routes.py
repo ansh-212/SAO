@@ -2,16 +2,21 @@
 InterviewVault — AI Interview Coach Routes
 Mock interview sessions with multi-turn AI conversations.
 """
+import os
+import uuid
 from fastapi import APIRouter, Depends
+from fastapi import File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from typing import List, Dict, Optional, Any
 import models
 from auth import get_current_user
 from database import get_db
+from config import settings
 from services.interview_service import (
     start_interview, continue_interview, end_interview, INTERVIEW_TOPICS
 )
+from services.visual_capture_service import evaluate_interview_capture
 
 router = APIRouter(prefix="/api/interview", tags=["Interview Coach"])
 
@@ -96,3 +101,51 @@ def end_session(
         behavioral_stats=data.behavioral_stats
     )
     return {"status": "completed", **result}
+
+
+@router.post("/capture/evaluate")
+async def evaluate_written_response(
+    question_text: str = Form(...),
+    typed_context: str = Form(""),
+    language: str = Form("en"),
+    response_file: UploadFile = File(...),
+    current_user: models.User = Depends(get_current_user),
+):
+    content = await response_file.read()
+    if not content:
+        raise HTTPException(status_code=400, detail="Empty image file")
+
+    capture_dir = os.path.join(settings.UPLOAD_DIR, "whiteboard_captures")
+    os.makedirs(capture_dir, exist_ok=True)
+    ext = os.path.splitext(response_file.filename or "capture.jpg")[1] or ".jpg"
+    filename = f"interview_capture_{current_user.id}_{uuid.uuid4().hex}{ext}"
+    image_path = os.path.join(capture_dir, filename)
+
+    with open(image_path, "wb") as saved:
+        saved.write(content)
+
+    result = evaluate_interview_capture(
+        question_text=question_text,
+        image_path=image_path,
+        language=language,
+        typed_context=typed_context,
+    )
+
+    return {
+        "status": "ok",
+        "summary": result.get("summary", ""),
+        "feedback": result.get("feedback", ""),
+        "scores": result.get("scores", {}),
+        "overall_score": result.get("overall_score", 0),
+        "extracted_text": result.get("transcribed_text", ""),
+        "interpretation_status": result.get("interpretation_status", "not_interpretable"),
+        "interpretation_confidence": result.get("interpretation_confidence", 0),
+        "interpreted_content": result.get("interpreted_content", ""),
+        "diagram_representation": result.get("diagram_representation", ""),
+        "formulae_detected": result.get("formulae_detected", []),
+        "detected_points": result.get("detected_points", []),
+        "answer_status": result.get("answer_status", "unable_to_determine"),
+        "correctness_reason": result.get("correctness_reason", ""),
+        "missing_elements": result.get("missing_elements", []),
+        "evaluator_used": result.get("evaluator_used", "fallback"),
+    }

@@ -1,5 +1,11 @@
-from google import genai
-from google.genai import types
+try:
+    from google import genai
+    from google.genai import types
+    USE_NEW_GENAI_SDK = True
+except ImportError:
+    import google.generativeai as genai
+    types = None
+    USE_NEW_GENAI_SDK = False
 import json
 import re
 from typing import List, Dict, Any, Optional
@@ -15,7 +21,10 @@ LANGUAGE_NAMES = {
 def get_client():
     if not settings.GEMINI_API_KEY:
         return None
-    return genai.Client(api_key=settings.GEMINI_API_KEY)
+    if USE_NEW_GENAI_SDK:
+        return genai.Client(api_key=settings.GEMINI_API_KEY)
+    genai.configure(api_key=settings.GEMINI_API_KEY)
+    return genai.GenerativeModel(settings.GEMINI_MODEL)
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -89,17 +98,30 @@ def _generate(prompt: str, json_mode: bool = False) -> Optional[str]:
     if not client:
         return None
     try:
-        config = None
-        if json_mode:
-            config = types.GenerateContentConfig(
-                response_mime_type="application/json"
+        if USE_NEW_GENAI_SDK:
+            config = None
+            if json_mode and types is not None:
+                config = types.GenerateContentConfig(
+                    response_mime_type="application/json"
+                )
+            response = client.models.generate_content(
+                model=settings.GEMINI_MODEL,
+                contents=prompt,
+                config=config
             )
-        response = client.models.generate_content(
-            model=settings.GEMINI_MODEL,
-            contents=prompt,
-            config=config
+            return response.text
+
+        generation_config = None
+        if json_mode:
+            generation_config = {
+                "response_mime_type": "application/json"
+            }
+
+        response = client.generate_content(
+            prompt,
+            generation_config=generation_config
         )
-        return response.text
+        return getattr(response, "text", None)
     except Exception as e:
         print(f"Gemini API error: {e}")
         return None
@@ -234,7 +256,7 @@ TEXT FROM DOCUMENT:
 REQUIREMENTS:
 - Difficulty: {difficulty}
 - Language: {lang_name}
-- Types: open_ended (essay-style), scenario (real-world application), explanation (explain WHY)
+- Types: open_ended (essay-style), scenario (real-world application), explanation (explain WHY), whiteboard_capture (write or draw on paper)
 - Each question should reference a SPECIFIC section, formula, concept, or example from the text
 
 Respond ONLY with a valid JSON array:
