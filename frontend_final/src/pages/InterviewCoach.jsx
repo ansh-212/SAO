@@ -224,6 +224,9 @@ export default function InterviewCoach() {
     const [captureFile, setCaptureFile] = useState(null)
     const [capturePreviewUrl, setCapturePreviewUrl] = useState('')
     const [cameraActive, setCameraActive] = useState(false)
+    const [cameraDevices, setCameraDevices] = useState([])
+    const [selectedCameraId, setSelectedCameraId] = useState('')
+    const [showCameraSelector, setShowCameraSelector] = useState(false)
     const [captureNote, setCaptureNote] = useState('')
     const [captureBusy, setCaptureBusy] = useState(false)
     const [captureError, setCaptureError] = useState('')
@@ -265,6 +268,52 @@ export default function InterviewCoach() {
         window.speechSynthesis.speak(utterance);
     }
 
+    const stopCaptureCamera = () => {
+        if (captureStreamRef.current) {
+            captureStreamRef.current.getTracks().forEach((track) => track.stop())
+            captureStreamRef.current = null
+        }
+        if (captureVideoRef.current) {
+            captureVideoRef.current.srcObject = null
+        }
+        setCameraActive(false)
+    }
+
+    const startCaptureCamera = async (preferredCameraId = '') => {
+        setCaptureError('')
+        try {
+            stopCaptureCamera()
+            const constraints = preferredCameraId
+                ? { video: { deviceId: { exact: preferredCameraId } }, audio: false }
+                : {
+                    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
+                    audio: false,
+                }
+            const stream = await navigator.mediaDevices.getUserMedia(constraints)
+            captureStreamRef.current = stream
+            if (captureVideoRef.current) {
+                captureVideoRef.current.srcObject = stream
+                await captureVideoRef.current.play()
+            }
+            setCameraActive(true)
+
+            const devices = await navigator.mediaDevices.enumerateDevices()
+            const videoInputs = devices.filter((d) => d.kind === 'videoinput')
+            setCameraDevices(videoInputs)
+
+            const activeTrack = stream.getVideoTracks()[0]
+            const activeDeviceId = activeTrack?.getSettings?.().deviceId || ''
+            if (activeDeviceId) {
+                setSelectedCameraId(activeDeviceId)
+            } else if (!selectedCameraId && videoInputs[0]?.deviceId) {
+                setSelectedCameraId(videoInputs[0].deviceId)
+            }
+        } catch {
+            setCaptureError('Camera access is required for written-response capture. Please allow camera permission and retry.')
+            setCameraActive(false)
+        }
+    }
+
     // Auto-scroll + cleanup speech logic
     useEffect(() => {
         chatEndRef.current?.scrollIntoView({ behavior: 'smooth' })
@@ -282,38 +331,7 @@ export default function InterviewCoach() {
     }, [])
 
     useEffect(() => {
-        const startCaptureCamera = async () => {
-            if (!showCapturePopup) return
-            setCaptureError('')
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: { facingMode: { ideal: 'environment' }, width: { ideal: 1280 }, height: { ideal: 720 } },
-                    audio: false,
-                })
-                captureStreamRef.current = stream
-                if (captureVideoRef.current) {
-                    captureVideoRef.current.srcObject = stream
-                    await captureVideoRef.current.play()
-                }
-                setCameraActive(true)
-            } catch {
-                setCaptureError('Camera access is required for written-response capture. Please allow camera permission and retry.')
-                setCameraActive(false)
-            }
-        }
-
-        const stopCaptureCamera = () => {
-            if (captureStreamRef.current) {
-                captureStreamRef.current.getTracks().forEach((track) => track.stop())
-                captureStreamRef.current = null
-            }
-            if (captureVideoRef.current) {
-                captureVideoRef.current.srcObject = null
-            }
-            setCameraActive(false)
-        }
-
-        if (showCapturePopup) startCaptureCamera()
+        if (showCapturePopup) startCaptureCamera(selectedCameraId)
         else stopCaptureCamera()
 
         return () => stopCaptureCamera()
@@ -1060,6 +1078,7 @@ export default function InterviewCoach() {
                                     setCapturePreviewUrl('')
                                     setCaptureNote(input || '')
                                     setCaptureError('')
+                                    setShowCameraSelector(false)
                                     setShowCapturePopup(true)
                                 }}
                             >
@@ -1180,6 +1199,56 @@ export default function InterviewCoach() {
                                 <p style={{ marginTop: 0, marginBottom: 10, color: 'var(--dk-text-muted)', fontSize: 13 }}>
                                     The current question looks like a write/draw prompt. Take a live photo with your camera to include it in evaluation.
                                 </p>
+
+                                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10, gap: 8 }}>
+                                    <button
+                                        type="button"
+                                        className="dk-btn dk-btn-ghost"
+                                        onClick={() => setShowCameraSelector((prev) => !prev)}
+                                        style={{ fontSize: 12, padding: '6px 10px' }}
+                                    >
+                                        {showCameraSelector ? 'Hide Camera List' : 'Select Camera'}
+                                    </button>
+                                    {selectedCameraId && (
+                                        <span style={{ fontSize: 11, color: 'var(--dk-text-muted)' }}>
+                                            Active: {cameraDevices.find((d) => d.deviceId === selectedCameraId)?.label || 'Current camera'}
+                                        </span>
+                                    )}
+                                </div>
+
+                                {showCameraSelector && (
+                                    <div style={{ marginBottom: 10, border: '1px solid var(--dk-border)', borderRadius: 10, background: 'var(--dk-surface-2)', maxHeight: 130, overflowY: 'auto' }}>
+                                        {cameraDevices.length === 0 ? (
+                                            <div style={{ padding: '8px 10px', fontSize: 12, color: 'var(--dk-text-muted)' }}>
+                                                No camera devices detected yet.
+                                            </div>
+                                        ) : cameraDevices.map((device, index) => (
+                                            <button
+                                                key={device.deviceId || index}
+                                                type="button"
+                                                onClick={async () => {
+                                                    const nextId = device.deviceId || ''
+                                                    setSelectedCameraId(nextId)
+                                                    setShowCameraSelector(false)
+                                                    await startCaptureCamera(nextId)
+                                                }}
+                                                style={{
+                                                    width: '100%',
+                                                    textAlign: 'left',
+                                                    padding: '8px 10px',
+                                                    border: 'none',
+                                                    background: selectedCameraId === device.deviceId ? 'rgba(99,102,241,0.18)' : 'transparent',
+                                                    color: 'var(--dk-text)',
+                                                    fontSize: 12,
+                                                    cursor: 'pointer',
+                                                    borderBottom: index === cameraDevices.length - 1 ? 'none' : '1px solid var(--dk-border)',
+                                                }}
+                                            >
+                                                {device.label || `Camera ${index + 1}`}
+                                            </button>
+                                        ))}
+                                    </div>
+                                )}
 
                                 <div style={{ padding: '8px 10px', borderRadius: 10, border: '1px solid var(--dk-border)', background: 'var(--dk-surface-2)', marginBottom: 10, fontSize: 12, color: 'var(--dk-text-sub)' }}>
                                     {captureQuestionText || activeQuestionText}
