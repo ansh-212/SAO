@@ -26,7 +26,7 @@ function extractQuestionText(message) {
 function getWrittenQuestionSlots(totalQuestions) {
     const total = Math.max(1, Number(totalQuestions) || 1)
     if (total <= 4) return [2].filter((n) => n <= total)
-    return [3, Math.max(4, total - 1)].filter((n, i, arr) => n <= total && arr.indexOf(n) === i)
+    return [2, Math.min(total - 1, 5)].filter((n, i, arr) => n <= total && arr.indexOf(n) === i)
 }
 
 function isWrittenQuestionNumber(questionNumber, totalQuestions) {
@@ -233,6 +233,9 @@ export default function InterviewCoach() {
     const captureVideoRef = useRef(null)
     const captureCanvasRef = useRef(null)
     const captureStreamRef = useRef(null)
+    const preferredVoiceRef = useRef(null)
+    const captureAnalysisTimersRef = useRef({})
+    const phaseRef = useRef('setup')
     const { isDemoMode, user } = useAuth()
     const navigate = useNavigate()
 
@@ -260,11 +263,45 @@ export default function InterviewCoach() {
         }
     }
 
+    const pickPreferredInterviewVoice = (voices = []) => {
+        if (!voices.length) return null
+
+        const maleHints = ['male', 'ravi', 'hemant', 'aaditya', 'arjun', 'man']
+        const femaleHints = ['female', 'zira', 'heera', 'susan', 'sara']
+
+        const scored = voices.map((voice) => {
+            const name = String(voice.name || '').toLowerCase()
+            const lang = String(voice.lang || '').toLowerCase()
+            let score = 0
+
+            if (lang.includes('en-in')) score += 70
+            if (lang.includes('hi-in')) score += 65
+            if (name.includes('india')) score += 30
+            if (lang.startsWith('en')) score += 15
+
+            if (maleHints.some((h) => name.includes(h))) score += 25
+            if (femaleHints.some((h) => name.includes(h))) score -= 8
+
+            return { voice, score }
+        })
+
+        scored.sort((a, b) => b.score - a.score)
+        return scored[0]?.voice || null
+    }
+
     const speakText = (text) => {
         if (!window.speechSynthesis) return;
         window.speechSynthesis.cancel();
         const cleanText = text.replace(/[*_#]/g, '').trim();
         const utterance = new SpeechSynthesisUtterance(cleanText);
+        if (preferredVoiceRef.current) {
+            utterance.voice = preferredVoiceRef.current
+            utterance.lang = preferredVoiceRef.current.lang || 'en-IN'
+        } else {
+            utterance.lang = 'en-IN'
+        }
+        utterance.rate = 0.95
+        utterance.pitch = 1
         window.speechSynthesis.speak(utterance);
     }
 
@@ -320,6 +357,31 @@ export default function InterviewCoach() {
     }, [messages, loading])
 
     useEffect(() => {
+        const setupVoices = () => {
+            if (!window.speechSynthesis?.getVoices) return
+            const voices = window.speechSynthesis.getVoices()
+            if (voices?.length) {
+                preferredVoiceRef.current = pickPreferredInterviewVoice(voices)
+            }
+        }
+
+        setupVoices()
+        if (window.speechSynthesis) {
+            window.speechSynthesis.onvoiceschanged = setupVoices
+        }
+
+        return () => {
+            if (window.speechSynthesis?.onvoiceschanged === setupVoices) {
+                window.speechSynthesis.onvoiceschanged = null
+            }
+        }
+    }, [])
+
+    useEffect(() => {
+        phaseRef.current = phase
+    }, [phase])
+
+    useEffect(() => {
         return () => {
             if (recognitionRef.current) recognitionRef.current.stop()
             if (window.speechSynthesis) window.speechSynthesis.cancel()
@@ -327,6 +389,8 @@ export default function InterviewCoach() {
                 captureStreamRef.current.getTracks().forEach((track) => track.stop())
                 captureStreamRef.current = null
             }
+            Object.values(captureAnalysisTimersRef.current).forEach((id) => clearTimeout(id))
+            captureAnalysisTimersRef.current = {}
         }
     }, [])
 
@@ -417,9 +481,7 @@ export default function InterviewCoach() {
         const captured = captureByQuestion[questionNum]
         if ((!input.trim() && !captured) || loading) return
         const baseMsg = input.trim() || 'Submitted written response image.'
-        const userMsg = captured?.interpreted_content || captured?.summary
-            ? `${baseMsg}\n\n[Uploaded written response interpretation]\n${captured.interpreted_content || captured.summary}`
-            : baseMsg
+        const userMsg = baseMsg
         setInput('')
 
         const newMessages = [...messages, { role: 'candidate', content: userMsg }]
@@ -592,16 +654,66 @@ export default function InterviewCoach() {
 
     const uploadWrittenResponse = async () => {
         if (!captureFile || !captureQuestionText || !captureQuestionNumber) {
-            setCaptureError('Please capture an image before analysis.')
+            setCaptureError('Please capture an image before submit.')
             return
         }
 
+        const currentQuestionNumber = captureQuestionNumber
+        const currentQuestionText = captureQuestionText
+        const localPreviewUrl = capturePreviewUrl
         setCaptureBusy(true)
         setCaptureError('')
+
+        const fetchDynamicCaptureQuestion = async ({ mode, interpretedContent = '', summary = '' }) => {
+            try {
+                const r = await api.post('/interview/capture/counter-question', {
+                    topic: selectedTopic,
+                    difficulty,
+                    question_text: currentQuestionText,
+                    interpreted_content: interpretedContent,
+                    summary,
+                    mode,
+                })
+                return String(r?.data?.question || '').trim()
+            } catch {
+                return ''
+            }
+        }
+
+        setCaptureByQuestion((prev) => ({
+            ...prev,
+            [currentQuestionNumber]: {
+                ...(prev[currentQuestionNumber] || {}),
+                status: 'processing',
+                question_number: currentQuestionNumber,
+                question_text: currentQuestionText,
+                submitted_at: Date.now(),
+            },
+        }))
+
+        setShowCapturePopup(false)
+        if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl)
+        setCapturePreviewUrl('')
+        setCaptureFile(null)
+        setCaptureBusy(false)
+        toast.success('Image submitted. Analysis is running in background.')
+
+        let askedAuxiliaryQuestion = false
+        const timerId = setTimeout(() => {
+            if (phaseRef.current !== 'interview') return
+            fetchDynamicCaptureQuestion({ mode: 'auxiliary' }).then((q) => {
+                if (!q || phaseRef.current !== 'interview') return
+                askedAuxiliaryQuestion = true
+                setMessages((prev) => [...prev, { role: 'interviewer', content: q }])
+                speakText(q)
+            })
+        }, 8000)
+        captureAnalysisTimersRef.current[currentQuestionNumber] = timerId
+
         try {
             const fd = new FormData()
             fd.append('response_file', captureFile)
-            fd.append('question_text', captureQuestionText)
+            fd.append('question_text', currentQuestionText)
             fd.append('typed_context', captureNote || input || '')
             fd.append('language', 'en')
 
@@ -609,12 +721,17 @@ export default function InterviewCoach() {
                 headers: { 'Content-Type': 'multipart/form-data' },
             })
 
+            if (captureAnalysisTimersRef.current[currentQuestionNumber]) {
+                clearTimeout(captureAnalysisTimersRef.current[currentQuestionNumber])
+                delete captureAnalysisTimersRef.current[currentQuestionNumber]
+            }
+
             setCaptureByQuestion((prev) => ({
                 ...prev,
-                [captureQuestionNumber]: {
+                [currentQuestionNumber]: {
                     status: 'completed',
-                    question_number: captureQuestionNumber,
-                    question_text: captureQuestionText,
+                    question_number: currentQuestionNumber,
+                    question_text: currentQuestionText,
                     summary: res.data.summary,
                     feedback: res.data.feedback,
                     overall_score: res.data.overall_score,
@@ -631,15 +748,33 @@ export default function InterviewCoach() {
                     evaluator_used: res.data.evaluator_used,
                 },
             }))
-            toast.success('Written response image captured and analyzed')
-            setShowCapturePopup(false)
-            if (capturePreviewUrl) URL.revokeObjectURL(capturePreviewUrl)
-            setCapturePreviewUrl('')
-            setCaptureFile(null)
+
+            if (askedAuxiliaryQuestion && phaseRef.current === 'interview') {
+                const followUp = await fetchDynamicCaptureQuestion({
+                    mode: 'post_analysis',
+                    interpretedContent: res.data.interpreted_content || '',
+                    summary: res.data.summary || '',
+                })
+                if (followUp && phaseRef.current === 'interview') {
+                    setMessages((prev) => [...prev, { role: 'interviewer', content: followUp }])
+                    speakText(followUp)
+                }
+            }
         } catch (err) {
+            if (captureAnalysisTimersRef.current[currentQuestionNumber]) {
+                clearTimeout(captureAnalysisTimersRef.current[currentQuestionNumber])
+                delete captureAnalysisTimersRef.current[currentQuestionNumber]
+            }
+            setCaptureByQuestion((prev) => ({
+                ...prev,
+                [currentQuestionNumber]: {
+                    ...(prev[currentQuestionNumber] || {}),
+                    status: 'failed',
+                    feedback: err?.response?.data?.detail || 'Could not analyze the uploaded image.',
+                },
+            }))
             setCaptureError(err?.response?.data?.detail || 'Could not analyze the uploaded image.')
-        } finally {
-            setCaptureBusy(false)
+            toast.error('Capture submitted, but analysis failed. You can retry upload.')
         }
     }
 
@@ -1065,8 +1200,11 @@ export default function InterviewCoach() {
                             This question may require writing or drawing. Use camera capture for real-time evaluation.
                         </div>
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0 }}>
+                            {captureByQuestion[questionNum]?.status === 'processing' && (
+                                <span className="badge badge-warning" style={{ fontSize: 11 }}>Processing</span>
+                            )}
                             {captureByQuestion[questionNum]?.status === 'completed' && (
-                                <span className="badge badge-success" style={{ fontSize: 11 }}>Captured</span>
+                                <span className="badge badge-success" style={{ fontSize: 11 }}>Submitted</span>
                             )}
                             <button
                                 className="dk-btn dk-btn-ghost dk-btn-sm"
@@ -1088,29 +1226,19 @@ export default function InterviewCoach() {
                     </div>
                 )}
 
-                {captureByQuestion[questionNum]?.status === 'completed' && (
+                {captureByQuestion[questionNum]?.status === 'processing' && (
                     <div style={{
                         marginBottom: 10,
                         padding: '10px 12px',
                         borderRadius: 10,
-                        background: 'rgba(16,185,129,0.08)',
-                        border: '1px solid rgba(16,185,129,0.25)',
+                        background: 'rgba(99,102,241,0.1)',
+                        border: '1px solid rgba(99,102,241,0.22)',
                     }}>
-                        <div style={{ fontSize: '0.78rem', color: '#34d399', fontWeight: 700, marginBottom: 4 }}>
-                            Capture Interpretation (Q{questionNum})
-                        </div>
-                        <div style={{ fontSize: '0.76rem', color: 'var(--dk-text-muted)', lineHeight: 1.5, marginBottom: 3 }}>
-                            Interpreted as: {shortText(captureByQuestion[questionNum]?.interpreted_content || captureByQuestion[questionNum]?.summary || 'Capture analyzed successfully.', 220)}
-                        </div>
-                        <div style={{ fontSize: '0.75rem', color: 'var(--dk-text-muted)', marginBottom: 3 }}>
-                            Interpretation: {String(captureByQuestion[questionNum]?.interpretation_status || 'not_interpretable').replace(/_/g, ' ')}
-                            {' · '}Confidence: {captureByQuestion[questionNum]?.interpretation_confidence ?? 0}%
-                        </div>
-                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: answerStatusColor(captureByQuestion[questionNum]?.answer_status), marginBottom: 3 }}>
-                            Verdict: {prettyAnswerStatus(captureByQuestion[questionNum]?.answer_status)}
+                        <div style={{ fontSize: '0.78rem', color: '#a5b4fc', fontWeight: 700, marginBottom: 4 }}>
+                            Written response submitted (Q{questionNum})
                         </div>
                         <div style={{ fontSize: '0.78rem', color: 'var(--dk-text-muted)', lineHeight: 1.5 }}>
-                            {shortText(captureByQuestion[questionNum]?.correctness_reason || captureByQuestion[questionNum]?.feedback || 'Capture analyzed successfully.')}
+                            Analysis is running in background and will appear in the final results.
                         </div>
                     </div>
                 )}
@@ -1297,7 +1425,7 @@ export default function InterviewCoach() {
                                     <>
                                         <button className="dk-btn dk-btn-ghost" onClick={retakeCaptureSnapshot} disabled={captureBusy}>Retake</button>
                                         <button className="dk-btn dk-btn-primary" onClick={uploadWrittenResponse} disabled={captureBusy}>
-                                            {captureBusy ? 'Analyzing...' : 'Analyze Capture'}
+                                            {captureBusy ? 'Submitting...' : 'Submit'}
                                         </button>
                                     </>
                                 )}

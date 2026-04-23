@@ -14,7 +14,7 @@ from auth import get_current_user
 from database import get_db
 from config import settings
 from services.interview_service import (
-    start_interview, continue_interview, end_interview, INTERVIEW_TOPICS
+    start_interview, continue_interview, end_interview, INTERVIEW_TOPICS, generate_capture_counter_question
 )
 from services.visual_capture_service import evaluate_interview_capture
 
@@ -43,6 +43,15 @@ class InterviewEndRequest(BaseModel):
     history: List[Dict[str, str]]
     total_questions: int
     behavioral_stats: Optional[Dict[str, Any]] = None
+
+
+class CaptureCounterQuestionRequest(BaseModel):
+    topic: str
+    difficulty: str
+    question_text: str
+    interpreted_content: Optional[str] = ""
+    summary: Optional[str] = ""
+    mode: Optional[str] = "auxiliary"
 
 
 @router.get("/topics")
@@ -149,3 +158,19 @@ async def evaluate_written_response(
         "missing_elements": result.get("missing_elements", []),
         "evaluator_used": result.get("evaluator_used", "fallback"),
     }
+
+
+@router.post("/capture/counter-question")
+def generate_capture_counter_question_route(
+    data: CaptureCounterQuestionRequest,
+    current_user: models.User = Depends(get_current_user),
+):
+    result = generate_capture_counter_question(
+        topic=data.topic,
+        difficulty=data.difficulty,
+        question_text=data.question_text,
+        interpreted_content=data.interpreted_content or "",
+        summary=data.summary or "",
+        mode=data.mode or "auxiliary",
+    )
+    return {"status": "ok", **result}
