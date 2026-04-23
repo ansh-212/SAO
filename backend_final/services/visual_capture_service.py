@@ -128,6 +128,12 @@ def _fallback_visual_evaluation(question: Dict[str, Any], typed_context: str = "
             "Set GEMINI_API_KEY for best results on diagrams, commands, and handwritten steps."
         )
 
+    interpretation_status = "interpreted_from_note" if note_text else "insufficient_input"
+    interpretation_confidence = 70 if note_text else 35
+    answer_status = "partially_right" if coverage >= 0.5 else "wrong"
+    if not note_text:
+        answer_status = "unable_to_determine"
+
     return {
         "transcribed_text": note_text,
         "summary": summary,
@@ -137,6 +143,19 @@ def _fallback_visual_evaluation(question: Dict[str, Any], typed_context: str = "
         "strengths": ["Response image uploaded successfully"],
         "gaps": ["Automatic visual understanding is running in fallback mode"],
         "legibility": 60 if note_text else 35,
+        "interpretation_status": interpretation_status,
+        "interpretation_confidence": interpretation_confidence,
+        "interpreted_content": note_text[:1200] if note_text else "Could not confidently read the image content in fallback mode.",
+        "diagram_representation": "Diagram interpretation unavailable in fallback mode.",
+        "formulae_detected": [],
+        "detected_points": [note_text[:200]] if note_text else [],
+        "answer_status": answer_status,
+        "correctness_reason": (
+            "This verdict is estimated from typed note coverage because multimodal image interpretation is unavailable."
+            if note_text else
+            "Could not determine correctness because readable extracted content is unavailable."
+        ),
+        "missing_elements": [],
         "overall_score": _score_average(scores),
         "evaluator_used": "fallback",
     }
@@ -149,7 +168,7 @@ def evaluate_visual_capture_payload(
     typed_context: str = "",
 ) -> Dict[str, Any]:
     client = get_client()
-    if not client or types is None:
+    if not client:
         return _fallback_visual_evaluation(question, typed_context)
 
     mime_type = mimetypes.guess_type(image_path)[0] or "image/jpeg"
@@ -185,6 +204,15 @@ Respond ONLY as valid JSON with this exact structure:
   "transcribed_text": "string",
   "summary": "2-4 sentence summary of what is on the page",
   "matches_question": true,
+    "interpretation_status": "interpreted_successfully" or "partially_interpreted" or "not_interpretable",
+    "interpretation_confidence": 0,
+    "interpreted_content": "what you could read and understand from the image",
+    "diagram_representation": "what the diagram/flowchart appears to represent",
+    "formulae_detected": ["formula 1", "formula 2"],
+    "detected_points": ["step/point 1", "step/point 2"],
+    "answer_status": "right" or "partially_right" or "wrong" or "unable_to_determine",
+    "correctness_reason": "why you marked it right/partially_right/wrong",
+    "missing_elements": ["what is missing or incorrect"],
   "scores": {{
     "depth": 0,
     "accuracy": 0,
@@ -200,17 +228,45 @@ Respond ONLY as valid JSON with this exact structure:
 Use {lang_name} in the feedback."""
 
     try:
-        response = client.models.generate_content(
-            model=settings.GEMINI_MODEL,
-            contents=[
-                types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+        if types is not None:
+            response = client.models.generate_content(
+                model=settings.GEMINI_MODEL,
+                contents=[
+                    types.Part.from_bytes(data=image_bytes, mime_type=mime_type),
+                    prompt,
+                ],
+            )
+        else:
+            # Legacy google-generativeai SDK path.
+            response = client.generate_content([
                 prompt,
-            ],
-        )
+                {
+                    "mime_type": mime_type,
+                    "data": image_bytes,
+                },
+            ])
+
         parsed = _parse_json_object(getattr(response, "text", "") or "")
         if parsed:
             scores = parsed.get("scores", {}) or {}
             parsed["overall_score"] = _score_average(scores)
+            parsed["interpretation_status"] = (
+                str(parsed.get("interpretation_status") or "").strip().lower() or "partially_interpreted"
+            )
+            parsed["interpretation_confidence"] = max(
+                0,
+                min(100, int(parsed.get("interpretation_confidence") or 0))
+            )
+            parsed["interpreted_content"] = str(parsed.get("interpreted_content") or parsed.get("transcribed_text") or "")[:2000]
+            parsed["diagram_representation"] = str(parsed.get("diagram_representation") or "")[:1000]
+            if not isinstance(parsed.get("formulae_detected"), list):
+                parsed["formulae_detected"] = []
+            if not isinstance(parsed.get("detected_points"), list):
+                parsed["detected_points"] = []
+            parsed["answer_status"] = str(parsed.get("answer_status") or "unable_to_determine").strip().lower()
+            parsed["correctness_reason"] = str(parsed.get("correctness_reason") or parsed.get("feedback") or "")[:1400]
+            if not isinstance(parsed.get("missing_elements"), list):
+                parsed["missing_elements"] = []
             parsed["evaluator_used"] = "gemini-multimodal"
             return parsed
     except Exception as exc:

@@ -25,9 +25,8 @@ function extractQuestionText(message) {
 
 function getWrittenQuestionSlots(totalQuestions) {
     const total = Math.max(1, Number(totalQuestions) || 1)
-    if (total <= 3) return [2]
-    if (total <= 6) return [2, 4].filter((n) => n <= total)
-    return [2, 5, 8].filter((n) => n <= total)
+    if (total <= 4) return [2].filter((n) => n <= total)
+    return [3, Math.max(4, total - 1)].filter((n, i, arr) => n <= total && arr.indexOf(n) === i)
 }
 
 function isWrittenQuestionNumber(questionNumber, totalQuestions) {
@@ -38,6 +37,72 @@ function shortText(value, max = 180) {
     const text = String(value || '').trim()
     if (text.length <= max) return text
     return `${text.slice(0, max).trimEnd()}...`
+}
+
+function getDemoFreshQuestion(topicName, questionNumber, totalQuestions) {
+    const topic = String(topicName || '').toLowerCase()
+    const written = isWrittenQuestionNumber(questionNumber, totalQuestions)
+
+    if (written) {
+        if (topic.includes('system design')) {
+            return 'Draw a simple high-level architecture for a URL shortener and then explain the data flow and one scaling bottleneck.'
+        }
+        if (topic.includes('database')) {
+            return 'Draw a small ER diagram for users, orders, and products, then explain the primary/foreign key relationships.'
+        }
+        if (topic.includes('algorithm') || topic.includes('data structures')) {
+            return 'Write the core time-complexity formula for your approach and draw a short flowchart for the key decision steps.'
+        }
+        return `Draw one concise ${topicName} diagram/flow and explain your reasoning verbally.`
+    }
+
+    const bank = {
+        'data structures & algorithms': [
+            'How would you choose between a hash map and a balanced BST for a latency-sensitive feature?',
+            'What edge cases are commonly missed in DSA interviews, and how do you systematically catch them?',
+            'When can an optimization make a DSA solution worse in production?',
+        ],
+        'system design': [
+            'How would you design graceful degradation when a downstream dependency is unstable?',
+            'When would you prioritize caching over database optimization, and why?',
+            'How would you define measurable SLOs for a read-heavy service?',
+        ],
+        'operating systems': [
+            'How do scheduling decisions affect latency-sensitive applications?',
+            'Explain one practical deadlock scenario and how you would prevent it.',
+            'How does virtual memory behavior show up in real application performance?',
+        ],
+        'database management': [
+            'How would you decide between normalization and denormalization for a large-scale app?',
+            'Which transaction isolation level would you choose for payments and why?',
+            'How would you diagnose a slow SQL query in production?',
+        ],
+        'computer networks': [
+            'How does TCP congestion control impact end-user latency?',
+            'When does HTTP/2 help significantly over HTTP/1.1?',
+            'How would you debug intermittent packet loss between services?',
+        ],
+    }
+
+    const exact = bank[topic]
+    if (exact && exact.length) return exact[(questionNumber - 1) % exact.length]
+    return `What are the most practical trade-offs in ${topicName}, and how would you choose between options in production?`
+}
+
+function prettyAnswerStatus(status) {
+    const normalized = String(status || '').toLowerCase()
+    if (normalized === 'right') return 'Right'
+    if (normalized === 'partially_right') return 'Partially Right'
+    if (normalized === 'wrong') return 'Wrong'
+    return 'Unable to Determine'
+}
+
+function answerStatusColor(status) {
+    const normalized = String(status || '').toLowerCase()
+    if (normalized === 'right') return '#34d399'
+    if (normalized === 'partially_right') return '#fbbf24'
+    if (normalized === 'wrong') return '#f87171'
+    return 'var(--dk-text-muted)'
 }
 
 /* ─── Typing indicator dots ──────────────────────────────────────────────── */
@@ -334,8 +399,8 @@ export default function InterviewCoach() {
         const captured = captureByQuestion[questionNum]
         if ((!input.trim() && !captured) || loading) return
         const baseMsg = input.trim() || 'Submitted written response image.'
-        const userMsg = captured?.summary
-            ? `${baseMsg}\n\n[Uploaded written response summary]\n${captured.summary}`
+        const userMsg = captured?.interpreted_content || captured?.summary
+            ? `${baseMsg}\n\n[Uploaded written response interpretation]\n${captured.interpreted_content || captured.summary}`
             : baseMsg
         setInput('')
 
@@ -356,9 +421,8 @@ export default function InterviewCoach() {
                     speakText(endText);
                     setTimeout(() => showDemoEvaluation(), 1500)
                 } else {
-                    const nextQuestionText = isWrittenQuestionNumber(nextQ, totalQ)
-                        ? 'Write the steps for an advanced scenario in this topic and draw a flow diagram that covers edge cases, scalability, and common production pitfalls.'
-                        : 'Can you dive deeper into a more advanced aspect of this topic? Explain key trade-offs, edge cases, and how you would handle them in production.'
+                    const topicInfo = topics.find(t => t.id === selectedTopic) || topics[0] || { name: selectedTopic }
+                    const nextQuestionText = getDemoFreshQuestion(topicInfo.name, nextQ, totalQ)
                     const nextText = `Good response! I appreciate the detail.\n\nFor your next question (${nextQ}/${totalQ}):\n\n${nextQuestionText}`;
                     setMessages(prev => [
                         ...prev,
@@ -383,6 +447,11 @@ export default function InterviewCoach() {
                     history: newMessages, total_questions: totalQ,
                     behavioral_stats: behavioralStats
                 })
+                const evaluationPayload = {
+                    ...res.data,
+                    visual_capture_results: captureByQuestion,
+                    question_text_by_number: questionTextByNumber,
+                }
                 const closingMsg = res.data.closing_message || "Thank you for completing the interview!";
                 const finalTranscript = [
                     ...newMessages,
@@ -390,10 +459,10 @@ export default function InterviewCoach() {
                 ]
                 setMessages(finalTranscript)
                 speakText(closingMsg);
-                setEvaluation(res.data)
+                setEvaluation(evaluationPayload)
                 setPhase('evaluation')
                 persistSession({
-                    evaluationData: res.data,
+                    evaluationData: evaluationPayload,
                     transcript: finalTranscript,
                     behavioralStats,
                 })
@@ -532,6 +601,15 @@ export default function InterviewCoach() {
                     feedback: res.data.feedback,
                     overall_score: res.data.overall_score,
                     extracted_text: res.data.extracted_text,
+                    interpretation_status: res.data.interpretation_status,
+                    interpretation_confidence: res.data.interpretation_confidence,
+                    interpreted_content: res.data.interpreted_content,
+                    diagram_representation: res.data.diagram_representation,
+                    formulae_detected: res.data.formulae_detected,
+                    detected_points: res.data.detected_points,
+                    answer_status: res.data.answer_status,
+                    correctness_reason: res.data.correctness_reason,
+                    missing_elements: res.data.missing_elements,
                     evaluator_used: res.data.evaluator_used,
                 },
             }))
@@ -696,12 +774,20 @@ export default function InterviewCoach() {
             'Strong Hire': '#10b981', 'Hire': '#06b6d4', 'Lean Hire': '#f59e0b',
             'Lean No Hire': '#f97316', 'No Hire': '#ef4444',
         }
+        const mergedCaptureResults = {
+            ...(evaluation.visual_capture_results || {}),
+            ...captureByQuestion,
+        }
+        const questionTexts = {
+            ...(evaluation.question_text_by_number || {}),
+            ...questionTextByNumber,
+        }
         const questionAnalysisRows = Array.from({ length: totalQ }, (_, idx) => {
             const questionNumber = idx + 1
             return {
                 questionNumber,
-                questionText: questionTextByNumber[questionNumber] || 'Question text unavailable.',
-                capture: captureByQuestion[questionNumber] || null,
+                questionText: questionTexts[questionNumber] || 'Question text unavailable.',
+                capture: mergedCaptureResults[questionNumber] || mergedCaptureResults[String(questionNumber)] || null,
             }
         })
         return (
@@ -764,7 +850,7 @@ export default function InterviewCoach() {
 
                     <div className="dk-card" style={{ marginBottom: 20 }}>
                         <h3 style={{ fontSize: '0.9rem', fontWeight: 700, color: 'var(--dk-text)', marginBottom: 12 }}>
-                            🧾 Question-Wise Whiteboard Analysis
+                            🧾 Question-Wise Capture Interpretation
                         </h3>
                         {questionAnalysisRows.map((row) => (
                             <div
@@ -788,9 +874,21 @@ export default function InterviewCoach() {
                                         <div style={{ fontSize: '0.74rem', color: '#34d399', marginBottom: 4 }}>
                                             Score: {row.capture.overall_score ?? '-'}%
                                         </div>
-                                        <div style={{ fontSize: '0.75rem', color: 'var(--dk-text-muted)', lineHeight: 1.5 }}>
-                                            {shortText(row.capture.summary || row.capture.feedback || 'Analyzed capture available.', 260)}
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--dk-text-muted)', marginBottom: 4 }}>
+                                            Interpretation: {String(row.capture.interpretation_status || 'not_interpretable').replace(/_/g, ' ')}
+                                            {' · '}Confidence: {row.capture.interpretation_confidence ?? 0}%
                                         </div>
+                                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: answerStatusColor(row.capture.answer_status), marginBottom: 4 }}>
+                                            Answer Verdict: {prettyAnswerStatus(row.capture.answer_status)}
+                                        </div>
+                                        <div style={{ fontSize: '0.75rem', color: 'var(--dk-text-muted)', lineHeight: 1.5 }}>
+                                            {shortText(row.capture.interpreted_content || row.capture.summary || row.capture.feedback || 'Analyzed capture available.', 260)}
+                                        </div>
+                                        {!!row.capture.correctness_reason && (
+                                            <div style={{ fontSize: '0.74rem', color: 'var(--dk-text-muted)', lineHeight: 1.5, marginTop: 6 }}>
+                                                Why: {shortText(row.capture.correctness_reason, 240)}
+                                            </div>
+                                        )}
                                     </>
                                 ) : (
                                     <div style={{ fontSize: '0.75rem', color: 'var(--dk-text-muted)' }}>
@@ -865,10 +963,15 @@ export default function InterviewCoach() {
                                         topic: selectedTopic, difficulty, history: messages, total_questions: totalQ,
                                         behavioral_stats: behavioralStats
                                     }).then(r => {
-                                        setEvaluation(r.data)
+                                        const evaluationPayload = {
+                                            ...r.data,
+                                            visual_capture_results: captureByQuestion,
+                                            question_text_by_number: questionTextByNumber,
+                                        }
+                                        setEvaluation(evaluationPayload)
                                         setPhase('evaluation')
                                         persistSession({
-                                            evaluationData: r.data,
+                                            evaluationData: evaluationPayload,
                                             transcript: messages,
                                             behavioralStats,
                                         })
@@ -975,10 +1078,20 @@ export default function InterviewCoach() {
                         border: '1px solid rgba(16,185,129,0.25)',
                     }}>
                         <div style={{ fontSize: '0.78rem', color: '#34d399', fontWeight: 700, marginBottom: 4 }}>
-                            Whiteboard Analysis (Q{questionNum})
+                            Capture Interpretation (Q{questionNum})
+                        </div>
+                        <div style={{ fontSize: '0.76rem', color: 'var(--dk-text-muted)', lineHeight: 1.5, marginBottom: 3 }}>
+                            Interpreted as: {shortText(captureByQuestion[questionNum]?.interpreted_content || captureByQuestion[questionNum]?.summary || 'Capture analyzed successfully.', 220)}
+                        </div>
+                        <div style={{ fontSize: '0.75rem', color: 'var(--dk-text-muted)', marginBottom: 3 }}>
+                            Interpretation: {String(captureByQuestion[questionNum]?.interpretation_status || 'not_interpretable').replace(/_/g, ' ')}
+                            {' · '}Confidence: {captureByQuestion[questionNum]?.interpretation_confidence ?? 0}%
+                        </div>
+                        <div style={{ fontSize: '0.75rem', fontWeight: 700, color: answerStatusColor(captureByQuestion[questionNum]?.answer_status), marginBottom: 3 }}>
+                            Verdict: {prettyAnswerStatus(captureByQuestion[questionNum]?.answer_status)}
                         </div>
                         <div style={{ fontSize: '0.78rem', color: 'var(--dk-text-muted)', lineHeight: 1.5 }}>
-                            {shortText(captureByQuestion[questionNum]?.summary || 'Capture analyzed successfully.')}
+                            {shortText(captureByQuestion[questionNum]?.correctness_reason || captureByQuestion[questionNum]?.feedback || 'Capture analyzed successfully.')}
                         </div>
                     </div>
                 )}
@@ -1053,51 +1166,59 @@ export default function InterviewCoach() {
                             exit={{ opacity: 0, y: 12, scale: 0.98 }}
                             transition={{ duration: 0.2 }}
                             className="dk-card"
-                            style={{ width: 'min(560px, 100%)' }}
+                            style={{
+                                width: 'min(560px, 100%)',
+                                maxHeight: '92vh',
+                                display: 'flex',
+                                flexDirection: 'column',
+                                overflow: 'hidden',
+                            }}
                             onClick={(e) => e.stopPropagation()}
                         >
-                            <h3 style={{ marginTop: 0, marginBottom: 8, color: 'var(--dk-text)' }}>Capture your written response</h3>
-                            <p style={{ marginTop: 0, marginBottom: 12, color: 'var(--dk-text-muted)', fontSize: 13 }}>
-                                The current question looks like a write/draw prompt. Take a live photo with your camera to include it in evaluation.
-                            </p>
+                            <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', paddingRight: 2 }}>
+                                <h3 style={{ marginTop: 0, marginBottom: 8, color: 'var(--dk-text)' }}>Capture your written response</h3>
+                                <p style={{ marginTop: 0, marginBottom: 10, color: 'var(--dk-text-muted)', fontSize: 13 }}>
+                                    The current question looks like a write/draw prompt. Take a live photo with your camera to include it in evaluation.
+                                </p>
 
-                            <div style={{ padding: '10px 12px', borderRadius: 10, border: '1px solid var(--dk-border)', background: 'var(--dk-surface-2)', marginBottom: 12, fontSize: 12, color: 'var(--dk-text-sub)' }}>
-                                {captureQuestionText || activeQuestionText}
-                            </div>
+                                <div style={{ padding: '8px 10px', borderRadius: 10, border: '1px solid var(--dk-border)', background: 'var(--dk-surface-2)', marginBottom: 10, fontSize: 12, color: 'var(--dk-text-sub)' }}>
+                                    {captureQuestionText || activeQuestionText}
+                                </div>
 
-                            <div style={{ marginBottom: 12 }}>
-                                {!captureFile ? (
-                                    <video
-                                        ref={captureVideoRef}
-                                        autoPlay
-                                        playsInline
-                                        muted
-                                        style={{ width: '100%', borderRadius: 12, border: '1px solid var(--dk-border)', background: '#020617' }}
-                                    />
-                                ) : (
-                                    <img
-                                        src={capturePreviewUrl}
-                                        alt="Written response capture"
-                                        style={{ width: '100%', borderRadius: 12, border: '1px solid var(--dk-border)', objectFit: 'cover' }}
-                                    />
+                                <div style={{ marginBottom: 10 }}>
+                                    {!captureFile ? (
+                                        <video
+                                            ref={captureVideoRef}
+                                            autoPlay
+                                            playsInline
+                                            muted
+                                            style={{ width: '100%', maxHeight: '42vh', borderRadius: 12, border: '1px solid var(--dk-border)', background: '#020617', objectFit: 'cover' }}
+                                        />
+                                    ) : (
+                                        <img
+                                            src={capturePreviewUrl}
+                                            alt="Written response capture"
+                                            style={{ width: '100%', maxHeight: '42vh', borderRadius: 12, border: '1px solid var(--dk-border)', objectFit: 'cover' }}
+                                        />
+                                    )}
+                                    <canvas ref={captureCanvasRef} style={{ display: 'none' }} />
+                                </div>
+
+                                <textarea
+                                    value={captureNote}
+                                    onChange={(e) => setCaptureNote(e.target.value)}
+                                    placeholder="Optional note: describe what you wrote/drew"
+                                    rows={2}
+                                    className="dk-input"
+                                    style={{ resize: 'none', marginBottom: 6 }}
+                                />
+
+                                {captureError && (
+                                    <div style={{ fontSize: 12, color: 'var(--dk-red)', marginBottom: 8 }}>{captureError}</div>
                                 )}
-                                <canvas ref={captureCanvasRef} style={{ display: 'none' }} />
                             </div>
 
-                            <textarea
-                                value={captureNote}
-                                onChange={(e) => setCaptureNote(e.target.value)}
-                                placeholder="Optional note: describe what you wrote/drew"
-                                rows={4}
-                                className="dk-input"
-                                style={{ resize: 'vertical', marginBottom: 8 }}
-                            />
-
-                            {captureError && (
-                                <div style={{ fontSize: 12, color: 'var(--dk-red)', marginBottom: 10 }}>{captureError}</div>
-                            )}
-
-                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10 }}>
+                            <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, paddingTop: 10, borderTop: '1px solid var(--dk-border)', marginTop: 8, background: 'var(--dk-surface)' }}>
                                 <button className="dk-btn dk-btn-ghost" onClick={closeCapturePopup} disabled={captureBusy}>Skip</button>
                                 {!captureFile ? (
                                     <button className="dk-btn dk-btn-primary" onClick={takeCaptureSnapshot} disabled={captureBusy || !cameraActive}>

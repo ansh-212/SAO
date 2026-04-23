@@ -30,15 +30,138 @@ WRITTEN_TRIGGER_PATTERN = re.compile(
 )
 
 
+def _topic_label(topic: str) -> str:
+    info = next((t for t in INTERVIEW_TOPICS if t["id"] == topic), None)
+    return info["name"] if info else topic
+
+
+def _extract_interviewer_questions(history: List[Dict[str, str]]) -> List[str]:
+    questions: List[str] = []
+    for msg in history or []:
+        if (msg.get("role") or "").lower() != "interviewer":
+            continue
+        text = str(msg.get("content") or "")
+        for line in text.split("\n"):
+            clean = line.strip()
+            if clean.endswith("?") and len(clean) > 20:
+                questions.append(clean)
+    return questions[-8:]
+
+
+def _normalize_question(text: str) -> str:
+    t = re.sub(r"[^a-z0-9\s]", " ", (text or "").lower())
+    t = re.sub(r"\s+", " ", t).strip()
+    return t
+
+
+def _question_too_similar(candidate: str, asked_questions: List[str]) -> bool:
+    c_norm = _normalize_question(candidate)
+    if not c_norm:
+        return True
+    c_tokens = set(c_norm.split())
+    if not c_tokens:
+        return True
+
+    for asked in asked_questions:
+        a_norm = _normalize_question(asked)
+        if not a_norm:
+            continue
+        if c_norm in a_norm or a_norm in c_norm:
+            return True
+        a_tokens = set(a_norm.split())
+        overlap = len(c_tokens & a_tokens) / max(1, min(len(c_tokens), len(a_tokens)))
+        if overlap >= 0.72:
+            return True
+    return False
+
+
+def _topic_fresh_question(topic_name: str, question_number: int, should_be_written: bool) -> str:
+    qn = max(1, int(question_number or 1))
+    if should_be_written:
+        if "System Design" in topic_name:
+            return "Draw a high-level architecture for a URL shortener and explain each component, data flow, and one scaling bottleneck."
+        if "Database" in topic_name:
+            return "Draw an ER diagram for an e-commerce order system (users, products, orders, payments) and explain keys and relationships."
+        if "Data Structures" in topic_name:
+            return "Write the core formula for time complexity of your approach and draw a small flowchart of the algorithm's main decision steps."
+        return f"Draw a simple {topic_name} workflow or architecture diagram and explain what each block does and why it is needed."
+
+    conceptual_bank = {
+        "Data Structures & Algorithms": [
+            "How would you choose between a hash map and a balanced BST for the same problem under tight latency constraints?",
+            "Explain one common DSA optimization technique and when it can backfire in production.",
+            "What edge cases do candidates often miss in array or string problems, and how would you systematically test for them?",
+        ],
+        "System Design": [
+            "How would you design for eventual consistency in a distributed service while keeping user experience predictable?",
+            "When would you choose caching over database indexing, and what trade-offs would you expect?",
+            "How would you define and monitor SLOs for a read-heavy API service?",
+        ],
+        "Operating Systems": [
+            "How do context switching and scheduling policy choices impact latency-sensitive applications?",
+            "Explain a realistic deadlock scenario and a practical prevention strategy.",
+            "How do virtual memory and page replacement policies affect application performance?",
+        ],
+        "Database Management": [
+            "How would you decide between normalization and denormalization for a high-traffic product catalog?",
+            "What isolation level would you choose for payment processing and why?",
+            "How would you debug a suddenly slow SQL query in production?",
+        ],
+        "Computer Networks": [
+            "How do TCP congestion control mechanisms influence user-perceived latency?",
+            "When does HTTP/2 materially improve performance over HTTP/1.1, and when not much?",
+            "How would you troubleshoot intermittent packet loss between two services?",
+        ],
+        "Machine Learning": [
+            "How would you detect and handle data drift after deploying an ML model?",
+            "What trade-offs do you consider when choosing precision vs recall in a real product?",
+            "How would you investigate overfitting if validation performance starts degrading?",
+        ],
+        "Python Programming": [
+            "How would you improve performance in a Python service handling CPU-heavy tasks?",
+            "When would you choose async IO over threading in Python, and why?",
+            "What Python code patterns help keep large codebases maintainable?",
+        ],
+        "Java Programming": [
+            "How would you reduce GC pauses in a latency-sensitive Java service?",
+            "When would you use composition instead of inheritance in a large Java codebase?",
+            "How would you troubleshoot a thread contention issue in production Java applications?",
+        ],
+        "React & Frontend": [
+            "How would you prevent unnecessary re-renders in a complex React page?",
+            "When should client state move to server state management, and why?",
+            "How would you improve Core Web Vitals for a data-heavy dashboard?",
+        ],
+        "Behavioral Questions": [
+            "Tell me about a time you handled conflicting priorities and how you decided what to do first.",
+            "How do you handle feedback you disagree with while staying collaborative?",
+            "Describe a difficult team decision and how you aligned everyone.",
+        ],
+        "Leadership & Teamwork": [
+            "How do you mentor a teammate who is struggling without taking over their work?",
+            "Describe how you would handle persistent disagreement between two strong engineers.",
+            "How do you create accountability in a team under deadline pressure?",
+        ],
+        "Problem Solving": [
+            "Walk me through your framework for breaking down an ambiguous technical problem.",
+            "How do you decide when to pivot from one solution path to another?",
+            "Describe how you validate assumptions quickly before deep implementation.",
+        ],
+    }
+    bank = conceptual_bank.get(topic_name) or [
+        f"What are the most important real-world trade-offs in {topic_name}, and how would you decide between options?",
+        f"How would you diagnose and fix a practical production issue related to {topic_name}?",
+        f"What pitfalls do engineers commonly face in {topic_name} and how would you avoid them?",
+    ]
+    return bank[(qn - 1) % len(bank)]
+
+
 def _force_written_prompt(question_text: str, topic_name: str) -> str:
-    """Guarantee the question contains write/draw keywords for capture testing."""
+    """Guarantee written prompts only for diagram/formula style questions."""
     text = (question_text or "").strip()
     if WRITTEN_TRIGGER_PATTERN.search(text):
         return text
-    return (
-        f"On paper, write the steps to solve a core {topic_name} problem and draw a simple "
-        "workflow/diagram for your approach. Then explain your reasoning."
-    )
+    return _topic_fresh_question(topic_name, 1, True)
 
 
 def _force_standard_prompt(question_text: str, topic_name: str, question_number: int = 1) -> str:
@@ -51,28 +174,24 @@ def _force_standard_prompt(question_text: str, topic_name: str, question_number:
             f"Can you explain the fundamental concepts of {topic_name} and how they apply "
             "in real-world software engineering?"
         )
-    return (
-        f"Question {question_number}: Building on your previous answer, explain a more advanced "
-        f"aspect of {topic_name}, including trade-offs and real-world edge cases."
-    )
+    return _topic_fresh_question(topic_name, question_number, False)
 
 
 def _written_question_slots(total_questions: int) -> set:
-    """Pick a few question numbers that should require written/diagram responses."""
+    """Pick only 1-2 question numbers that require written/diagram responses."""
     total = max(1, int(total_questions or 1))
-    if total <= 3:
+    if total <= 4:
         slots = {2}
-    elif total <= 6:
-        slots = {2, 4}
     else:
-        slots = {2, 5, 8}
+        first = min(3, total)
+        second = max(first + 2, (total // 2) + 1)
+        slots = {first, min(total, second)}
     return {n for n in slots if 1 <= n <= total}
 
 
 def start_interview(topic: str, difficulty: str = "intermediate", num_questions: int = 5) -> Optional[Dict[str, Any]]:
     """Generate an interview plan and opening question."""
-    topic_info = next((t for t in INTERVIEW_TOPICS if t["id"] == topic), None)
-    topic_name = topic_info["name"] if topic_info else topic
+    topic_name = _topic_label(topic)
     written_slots = sorted(_written_question_slots(num_questions))
 
     prompt = f"""You are an expert technical interviewer at a top tech company (Google/Meta level).
@@ -130,9 +249,11 @@ def continue_interview(
     total_questions: int,
     behavioral_stats: Optional[Dict[str, Any]] = None
 ) -> Optional[Dict[str, Any]]:
-    """Generate the next interview question based on conversation history."""
+    """Generate a fresh next interview question without repeating older questions."""
+    topic_name = _topic_label(topic)
     written_slots = sorted(_written_question_slots(total_questions))
     should_be_written = question_number in written_slots
+    asked_questions = _extract_interviewer_questions(history)
 
     # Build conversation context
     conv_text = ""
@@ -155,11 +276,16 @@ CANDIDATE'S LATEST RESPONSE:
 
 YOUR TASK:
 1. Briefly acknowledge the candidate's answer (1 sentence — what was good or what was missing)
-2. If this is NOT the last question, ask the NEXT question that builds on or relates to their response
+2. Ask a FRESH new question for the topic (do NOT ask a follow-up to previous answers)
 3. Adapt difficulty: if they struggled, make next question slightly easier; if they aced it, make it harder
 4. Keep the conversation natural and flowing
 5. Only question numbers in {written_slots} should be written/diagram style prompts.
 6. This question number is {question_number}; it should be {"written/diagram" if should_be_written else "normal conceptual"}.
+7. The question MUST be clearly relevant to {topic_name} (not generic CS theory).
+8. Do NOT repeat or paraphrase already asked interviewer questions.
+
+ALREADY ASKED INTERVIEWER QUESTIONS (do not repeat):
+{asked_questions}
 
 {"This is the LAST question. Make it a challenging wrap-up question." if question_number >= total_questions else ""}
 
@@ -179,15 +305,18 @@ Respond with JSON:
             result.setdefault("question_number", question_number)
             result.setdefault("performance_signal", "moderate")
             if should_be_written:
-                result["next_question"] = _force_written_prompt(result.get("next_question", ""), topic)
+                result["next_question"] = _force_written_prompt(result.get("next_question", ""), topic_name)
             else:
-                result["next_question"] = _force_standard_prompt(result.get("next_question", ""), topic, question_number)
+                result["next_question"] = _force_standard_prompt(result.get("next_question", ""), topic_name, question_number)
+
+            if _question_too_similar(result["next_question"], asked_questions):
+                result["next_question"] = _topic_fresh_question(topic_name, question_number, should_be_written)
             return result
 
     fallback_next_question = (
-        _force_written_prompt("", topic)
+        _force_written_prompt("", topic_name)
         if should_be_written
-        else _force_standard_prompt("", topic, question_number)
+        else _force_standard_prompt("", topic_name, question_number)
     )
 
     return {

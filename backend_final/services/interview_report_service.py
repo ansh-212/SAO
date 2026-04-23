@@ -178,6 +178,8 @@ def build_report(
         "category_scores": end_eval.get("category_scores") or {},
         "recommended_study_topics": end_eval.get("recommended_study_topics") or [],
         "closing_message": end_eval.get("closing_message") or "",
+        "visual_capture_results": end_eval.get("visual_capture_results") or {},
+        "question_text_by_number": end_eval.get("question_text_by_number") or {},
         "communication": communication,
         "topics_covered": topics_covered,
     }

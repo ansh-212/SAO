@@ -49,6 +49,13 @@ const VERDICT_VARIANT = {
   'No Hire': 'destructive',
 }
 
+const ANSWER_BADGE_VARIANT = {
+  right: 'success',
+  partially_right: 'warning',
+  wrong: 'destructive',
+  unable_to_determine: 'secondary',
+}
+
 export default function InterviewReport() {
   const { interviewId } = useParams()
   const navigate = useNavigate()
@@ -77,6 +84,22 @@ export default function InterviewReport() {
     const f = comm.filler_word_counts || {}
     return Object.entries(f).map(([word, count]) => ({ word, count }))
   }, [comm.filler_word_counts])
+
+  const visualCaptureRows = useMemo(() => {
+    const captures = report.visual_capture_results || {}
+    const questionTextMap = report.question_text_by_number || {}
+    return Object.entries(captures)
+      .map(([q, payload]) => {
+        const questionNumber = Number(q)
+        return {
+          questionNumber,
+          questionText: questionTextMap[q] || questionTextMap[String(questionNumber)] || 'Question text unavailable.',
+          ...payload,
+        }
+      })
+      .filter((row) => row && !Number.isNaN(row.questionNumber))
+      .sort((a, b) => a.questionNumber - b.questionNumber)
+  }, [report.question_text_by_number, report.visual_capture_results])
 
   if (isLoading) {
     return (
@@ -152,6 +175,7 @@ export default function InterviewReport() {
           <TabsList className="mb-4">
             <TabsTrigger value="overview">Overview</TabsTrigger>
             <TabsTrigger value="communication">Communication</TabsTrigger>
+            <TabsTrigger value="captures">Capture Interpretation</TabsTrigger>
             <TabsTrigger value="transcript">Transcript</TabsTrigger>
           </TabsList>
 
@@ -436,6 +460,44 @@ export default function InterviewReport() {
               </CardContent>
             </Card>
           </TabsContent>
+
+          <TabsContent value="captures">
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-semibold">Question-wise capture interpretation</CardTitle>
+              </CardHeader>
+              <CardContent>
+                {visualCaptureRows.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No capture interpretation data was saved for this interview.</p>
+                ) : (
+                  <div className="space-y-3">
+                    {visualCaptureRows.map((row) => (
+                      <div key={row.questionNumber} className="rounded-md border border-border/40 bg-card/40 p-3">
+                        <div className="mb-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                          Q{row.questionNumber}
+                        </div>
+                        <p className="mb-2 text-sm text-foreground/90">{row.questionText}</p>
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">Score: {Math.round(Number(row.overall_score || 0))}%</Badge>
+                          <Badge variant="secondary">
+                            Interpretation: {String(row.interpretation_status || 'not_interpretable').replace(/_/g, ' ')}
+                          </Badge>
+                          <Badge variant="secondary">Confidence: {Math.round(Number(row.interpretation_confidence || 0))}%</Badge>
+                          <Badge variant={ANSWER_BADGE_VARIANT[row.answer_status] || 'secondary'}>
+                            Verdict: {String(row.answer_status || 'unable_to_determine').replace(/_/g, ' ')}
+                          </Badge>
+                        </div>
+                        <p className="mb-1 text-xs uppercase tracking-wider text-muted-foreground">Interpreted content</p>
+                        <p className="mb-2 text-sm text-foreground/85">{row.interpreted_content || row.summary || row.extracted_text || 'No interpreted content available.'}</p>
+                        <p className="mb-1 text-xs uppercase tracking-wider text-muted-foreground">Correctness reasoning</p>
+                        <p className="text-sm text-foreground/85">{row.correctness_reason || row.feedback || 'No correctness rationale provided.'}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
         </Tabs>
 
         {report.closing_message && (
@@ -471,7 +533,7 @@ function ScoreOrb({ score, verdict }) {
     >
       <div
         className={cn(
-          'grid h-24 w-24 place-items-center rounded-full bg-gradient-to-br text-2xl font-bold text-white shadow-lg shadow-primary/30',
+          'grid h-24 w-24 place-items-center rounded-full bg-linear-to-br text-2xl font-bold text-white shadow-lg shadow-primary/30',
           tone,
         )}
       >
